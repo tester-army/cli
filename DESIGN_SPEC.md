@@ -29,25 +29,24 @@ The main agent generates and maintains test scenarios as the codebase evolves:
 │                     TesterArmy CLI                       │
 │  ┌─────────────────────────────────────────────────┐     │
 │  │  UI Layer (OpenTui + SolidJS)                   │     │
-│  │  - Chat interface                              │     │
-│  │  - Progress indicators                        │     │
-│  │  - Results reporting                           │     │
-│  │  - Command palette                             │     │
+│  │  - Routes (home/session)                       │     │
+│  │  - Command palette (/commands)                 │     │
+│  │  - Messages (user/assistant/test results)      │     │
 │  └─────────────────────────────────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
 │                   Agent Layer (Pi)                      │
 │  ┌─────────────────────────────────────────────────┐     │
-│  │  Provider abstraction                          │     │
-│  │  Agent loop with tools                        │     │
-│  │  Session history                              │     │
+│  │  ProviderManager - LLM abstraction             │     │
+│  │  Agent loop - Completion + tools               │     │
+│  │  Session history - Tree-structured            │     │
 │  └─────────────────────────────────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
 │                   Browser Layer                         │
 │  ┌─────────────────────────────────────────────────┐     │
 │  │  agent-browser CLI                            │     │
-│  │  - Ref-based interaction                       │     │
-│  │  - Multiple sessions                          │     │
-│  │  - Screenshots                                │     │
+│  │  - Refs (@e1, @e2) for element selection      │     │
+│  │  - Commands (open, click, type, screenshot)   │     │
+│  │  - Multiple isolated sessions                 │     │
 │  └─────────────────────────────────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
 │                   Worker Layer                          │
@@ -74,6 +73,52 @@ The main agent generates and maintains test scenarios as the codebase evolves:
 | UI | OpenTui with SolidJS |
 | Agent | Pi (pi-mono) |
 | Browser | agent-browser |
+
+## SolidJS Patterns
+
+```typescript
+// State
+const [state, setState] = createSignal(value)
+
+// Derived state
+const derived = createMemo(() => computation())
+
+// Side effects
+createEffect(() => sideEffect())
+
+// Shared context
+const ctx = createContext()
+useContext(ctx)
+```
+
+## Route-Based Navigation
+
+```typescript
+// Routes: Home (new session) ↔ Session (test execution)
+<Switch>
+  <Match when={route.data.type === "home"}>
+    <Home />
+  </Match>
+  <Match when={route.data.type === "session"}>
+    <Session />
+  </Match>
+</Switch>
+```
+
+## Command Palette
+
+Slash commands triggered with `/`:
+
+- `/run` - Run test scenario
+- `/generate` - Generate scenarios
+- `/config` - Configure providers
+- `/quit` - Exit app
+
+## Message Structure
+
+- **UserMessage** - Test scenario input
+- **AssistantMessage** - Test progress and results
+- **ToolResult** - Browser tool execution details
 
 ## CLI Commands
 
@@ -137,56 +182,53 @@ tester-army generate ./src/ - Scan project, generate scenarios
 - Create config file structure
 
 ### Phase 2: Provider Integration
-- Integrate Pi's provider abstraction
+- Integrate Pi's ProviderManager for LLM abstraction
 - Implement provider configuration UI
 - Add API key authentication
 - Support model selection
 
 ### Phase 3: UI Framework
-- Create main App component
-- Implement route-based navigation (home/session)
-- Build command palette with slash commands
-- Add keyboard shortcuts
+- Create App component with route-based navigation
+- Implement Home ↔ Session routes
+- Build command palette with slash commands (`/run`, `/generate`, `/config`)
+- Add keyboard shortcuts (Tab autocompletion, Ctrl+C copy)
 - Implement toast notifications
 
 ### Phase 4: Browser Integration
-- Create agent-browser wrapper
-- Implement session management
-- Add ref parsing and interaction
-- Implement screenshot capture
+- Create agent-browser wrapper (open, snapshot, click, type, screenshot)
+- Implement session management (createSession, useSession, closeSession)
+- Parse refs (@e1, @e2) from snapshots
 - Handle errors and retries
 
 ### Phase 5: Agent Loop
-- Build agent with test tools
-- Add browser control tools (open, click, type, screenshot)
-- Add assertion tools (text, URL, title)
+- Build agent with Pi's agent loop
+- Add browser tools (from Phase 4)
+- Add assertion tools (text, URL, title verification)
 - Implement test execution flow
-- Collect results
+- Collect pass/fail results
 
 ### Phase 6: Chat Interface
-- Create message components (user, assistant, test result)
-- Implement scrollable message list
-- Add progress indicators
-- Build timeline navigation
-- Display test results with screenshots
+- Create message components (UserMessage, AssistantMessage, TestResult)
+- Implement scrollable message list with sticky scroll
+- Add progress indicators (spinner, elapsed time)
+- Display test results with screenshots on failure
 
 ### Phase 7: Worker Manager
-- Create worker process spawning
-- Implement parallel execution
-- Add result aggregation
-- Handle timeouts
-- Manage worker lifecycle
+- Create worker process spawning (child_process.spawn)
+- Implement parallel execution (configurable concurrency)
+- Aggregate results from all workers
+- Handle timeouts and failures
 
 ### Phase 8: Scenarios
-- Build scenario parser
-- Store test history
+- Build markdown scenario parser
+- Store test history (~/.local/share/testerarmy/results)
 - Results shown in TUI (separate reports in future phase)
 
 ### Phase 9: Polish
 - Validate configuration
-- Add shell completion
-- Create README
-- Write tests
+- Add shell completion (bash, zsh, fish)
+- Create comprehensive README
+- Write tests (unit + integration)
 - Set up CI/CD
 
 ## Project Structure
