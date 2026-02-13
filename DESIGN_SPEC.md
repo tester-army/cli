@@ -88,10 +88,6 @@ tester-army run --parallel 5 - Parallel execution
 
 # Generate tests
 tester-army generate ./src/ - Scan project, generate scenarios
-
-# Reports
-tester-army report - Show test results
-tester-army report --format html - HTML report
 ```
 
 ## Configuration
@@ -181,11 +177,10 @@ tester-army report --format html - HTML report
 - Handle timeouts
 - Manage worker lifecycle
 
-### Phase 8: Scenarios & Reports
+### Phase 8: Scenarios
 - Build scenario parser
-- Implement report generation (Markdown, JSON, HTML)
 - Store test history
-- Add export functionality
+- Results shown in TUI (separate reports in future phase)
 
 ### Phase 9: Polish
 - Validate configuration
@@ -231,8 +226,8 @@ npm install -g @tester-army/cli
 ## Open Questions
 
 1. Self-Healing: Auto-fix or suggest-and-confirm?
-2. Reporting: What formats beyond HTML/JSON?
-3. Parallelization: Optimal worker count?
+2. Parallelization: Optimal worker count?
+3. Reports: Add in future phase (TUI shows results initially)
 
 ---
 
