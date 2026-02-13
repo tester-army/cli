@@ -562,68 +562,323 @@ export TESTERARMY_CONFIG_DIR=~/.config/testerarmy
 
 ## Implementation Phases
 
-### Phase 1: Foundation
-- Set up TypeScript project with SolidJS
-- Install dependencies (OpenTui Solid bindings, Pi packages)
-- Install agent-browser CLI
-- Configure TypeScript and ESLint
-- Set up configuration file (~/.config/testerarmy/testerarmy.json)
+### Phase 1: Foundation (1-2 days)
 
-### Phase 2: Provider Integration
-- Import Pi's provider manager
-- Configure supported providers (OpenAI, Anthropic, OpenCode, etc.)
-- Implement API key authentication
-- Add custom provider support via models.json
+**Goal:** Set up the project skeleton and tooling
 
-### Phase 3: Core UI Framework (from OpenCode patterns)
-- Create root app component with providers (SDK, Sync, Theme, Local, Keybind, Dialog)
-- Implement route-based navigation (home vs session)
-- Create context-based state management
-- Implement command palette with slash commands
-- Add keyboard shortcuts system
+**Deliverables:**
+- Working TypeScript project with SolidJS
+- All dependencies installed and configured
+- Build pipeline working (dev, build, lint)
+- Configuration file at correct location
 
-### Phase 4: agent-browser Integration
-- Create agent-browser wrapper class
-- Implement session management (multiple isolated browsers)
-- Add ref parsing and element interaction
-- Implement screenshot capture
-- Add error handling and retries
+**Details:**
+- Initialize project with `bun init` or `npm init`
+- Set up TypeScript with strict mode, DOM types
+- Configure ESLint with SolidJS recommended rules
+- Install: `@opentui/solid`, `@opentui/core`, `solid-js`, Pi packages
+- Create `~/.config/testerarmy/testerarmy.json` with default values
+- Set up package.json scripts: `dev`, `build`, `lint`, `typecheck`
+- Verify agent-browser CLI is installed and working (`agent-browser --version`)
 
-### Phase 5: Agent Loop (from Pi)
-- Import Pi's agent loop
-- Configure browser tools (from agent-browser)
-- Add assertion tools
-- Implement test execution flow
-- Add result collection
+**Success Criteria:**
+- `bun dev` starts development server
+- `bun build` produces production bundle
+- `bun lint` passes without errors
+- Config file created at startup if missing
 
-### Phase 6: Chat Interface (from OpenCode patterns)
-- Create message components (UserMessage, AssistantMessage, TestResult)
-- Implement scrollable message list with sticky scroll
-- Add tool result display components
-- Implement timeline navigation
-- Create fork/branch functionality for test scenarios
+---
 
-### Phase 7: Worker Manager
-- Create worker process spawning
-- Implement parallel execution
-- Add result aggregation
-- Implement timeout handling
-- Add worker lifecycle management
+### Phase 2: Provider Integration (2-3 days)
 
-### Phase 8: Scenarios & Reports
-- Create markdown scenario parser
-- Implement scenario validation
-- Add report generation (Markdown, JSON, HTML)
-- Implement result storage
-- Add export functionality
+**Goal:** Connect to LLM providers using Pi's provider manager
 
-### Phase 9: Polish
-- Validate configuration file (~/.config/testerarmy/testerarmy.json)
-- Implement command aliases
-- Add shell completion
-- Create comprehensive README
-- Add tests
-- Set up CI/CD
+**Deliverables:**
+- Working provider configuration system
+- API key and OAuth authentication
+- Provider switching UI
+
+**Details:**
+- Integrate Pi's ProviderManager from `@mariozechner/pi-coding-agent/providers`
+- Create provider configuration UI (dropdown to select provider)
+- Implement API key input (masked password field)
+- Support environment variable fallback (`OPENAI_API_KEY`, etc.)
+- Add provider model listing and selection
+- Implement provider health check (test API connection)
+- Store credentials securely (user's config file, not committed)
+- Add custom provider support via extended models.json
+
+**Success Criteria:**
+- User can add/configure providers via UI
+- Provider connection can be tested
+- Model can be switched mid-session
+- All 15+ Pi providers are supported
+
+---
+
+### Phase 3: Core UI Framework (3-4 days)
+
+**Goal:** Build the application shell with providers and routing
+
+**Deliverables:**
+- Root App component with all providers nested
+- Working route navigation (Home ↔ Session)
+- Command palette with slash commands
+- Keyboard shortcuts system
+
+**Details:**
+- Create App component following OpenCode patterns
+- Nest providers: SDKProvider → SyncProvider → ThemeProvider → LocalProvider → KeybindProvider → DialogProvider → CommandProvider
+- Implement route state (useRoute, useRouteData)
+- Create Home route (new session screen)
+- Create Session route (test execution screen)
+- Build CommandPalette component with slash commands
+- Register commands: `/new`, `/run`, `/generate`, `/report`, `/config`
+- Implement global keyboard shortcuts: Ctrl+C (copy), Esc (cancel), Tab (autocomplete)
+- Add Toast notification system (info, success, warning, error)
+- Implement error boundary with recovery options
+
+**Success Criteria:**
+- App renders without errors
+- Navigation between Home and Session works
+- Command palette opens with `/` and shows available commands
+- Keyboard shortcuts respond correctly
+- Toast notifications appear for actions
+
+---
+
+### Phase 4: agent-browser Integration (2-3 days)
+
+**Goal:** Connect browser automation via agent-browser CLI
+
+**Deliverables:**
+- Working Browser class wrapping agent-browser commands
+- Session management for isolated browser instances
+- Ref parsing and element interaction
+
+**Details:**
+- Create Browser class with methods: open, snapshot, click, type, screenshot, close
+- Implement session management: createSession, useSession, closeSession
+- Parse agent-browser snapshot output into structured data
+- Convert refs (@e1, @e2) to element identifiers
+- Implement screenshot capture and storage
+- Add error handling for browser failures
+- Implement retry logic for flaky commands
+- Add timeout handling for long-running operations
+- Support multiple concurrent browser sessions (one per worker)
+
+**Success Criteria:**
+- Browser can open URLs and capture snapshots
+- Refs can be used to interact with elements (click, type)
+- Screenshots are captured on demand
+- Multiple isolated sessions can run concurrently
+- Errors are handled gracefully with meaningful messages
+
+---
+
+### Phase 5: Agent Loop (3-4 days)
+
+**Goal:** Implement AI agent that interprets test scenarios and executes browser actions
+
+**Deliverables:**
+- Working agent loop that processes test steps
+- Browser tools integration (from Phase 4)
+- Assertion tools for test verification
+- Result collection and aggregation
+
+**Details:**
+- Integrate Pi's agent loop (createAgent from `@mariozechner/pi-coding-agent/core`)
+- Create custom tools for test execution:
+  - `browser_open(url)` - Navigate to URL
+  - `browser_snapshot()` - Get current page state
+  - `browser_click(ref)` - Click element by ref
+  - `browser_type(ref, text)` - Type text into element
+  - `browser_screenshot(path)` - Capture screenshot
+  - `browser_close()` - Close browser session
+  - `assert_text(ref, expected)` - Verify text content
+  - `assert_url(expected)` - Verify current URL
+  - `assert_title(expected)` - Verify page title
+- Implement step-by-step test execution
+- Collect pass/fail status for each assertion
+- Capture screenshots on failure
+- Generate structured test results
+
+**Success Criteria:**
+- Agent can parse natural language test steps
+- Each step triggers appropriate browser action
+- Assertions verify expected behavior
+- Results show pass/fail for each step
+- Screenshots captured on failures
+
+---
+
+### Phase 6: Chat Interface (3-4 days)
+
+**Goal:** Build the test execution UI with messages and progress
+
+**Deliverables:**
+- Message components (UserMessage, AssistantMessage, TestResult)
+- Scrollable message list with sticky scroll
+- Test progress indicators
+- Timeline navigation
+
+**Details:**
+- Create TestResultMessage component displaying:
+  - Test name and description
+  - Step-by-step execution progress
+  - Pass/fail status for each assertion
+  - Screenshot thumbnails (expandable)
+  - Error messages on failure
+- Implement scrollable message list:
+  - Virtual scrolling for large test suites
+  - Sticky scroll (auto-scroll to new messages)
+  - Scroll acceleration and momentum
+- Add progress indicators:
+  - Spinner during execution
+  - Progress bar for multi-step tests
+  - Elapsed time counter
+- Implement timeline navigation:
+  - Jump to specific test/step
+  - Filter by status (all, passed, failed)
+- Create test branch/fork functionality for variations
+- Add export transcript option (Markdown format)
+
+**Success Criteria:**
+- Messages display in a scrollable list
+- New messages auto-scroll into view
+- Progress indicators show execution status
+- Clicking on test jumps to that test in the list
+- Failed tests show error details and screenshots
+
+---
+
+### Phase 7: Worker Manager (2-3 days)
+
+**Goal:** Implement parallel test execution with worker processes
+
+**Deliverables:**
+- Worker process spawning and management
+- Parallel execution with configurable concurrency
+- Result aggregation from all workers
+- Timeout and failure handling
+
+**Details:**
+- Create worker entry point (workers/index.js)
+- Implement WorkerManager class:
+  - Spawn worker processes using `child_process.spawn`
+  - Distribute tests across workers (round-robin or priority-based)
+  - Track worker status (running, completed, failed)
+  - Implement graceful shutdown (Ctrl+C handling)
+- Configure parallel execution:
+  - Default: 5 concurrent workers
+  - Configurable via `--parallel` flag or config file
+  - Resource-aware scaling (reduce workers on memory warning)
+- Implement result aggregation:
+  - Collect results from all workers
+  - Generate unified report with summary
+  - Calculate pass rate and total execution time
+- Add timeout handling:
+  - Per-test timeout (configurable, default 60s)
+  - Per-worker timeout (restart stalled workers)
+  - Global timeout (abort all on hang)
+
+**Success Criteria:**
+- Tests can run in parallel (5+ concurrent)
+- Each worker gets its own browser session
+- Results are aggregated into a single report
+- Timeouts abort stalled tests
+- Ctrl+C gracefully shuts down all workers
+
+---
+
+### Phase 8: Scenarios & Reports (2-3 days)
+
+**Goal:** Add scenario parsing and report generation
+
+**Deliverables:**
+- Markdown scenario parser
+- Report generation (Markdown, JSON, HTML)
+- Result storage and history
+
+**Details:**
+- Create scenario parser:
+  - Parse Markdown files with test scenarios
+  - Extract test names, steps, assertions
+  - Validate scenario format (required fields)
+  - Support include directives for shared steps
+- Implement scenario generator:
+  - Scan project files for testable code
+  - Generate initial scenarios from UI components
+  - Suggest missing test coverage
+- Build report generation:
+  - Markdown: Readable text report with pass/fail summary
+  - JSON: Machine-readable with full details
+  - HTML: Visual report with screenshots, charts
+- Implement result storage:
+  - Save results to `~/.local/share/testerarmy/results/`
+  - Include timestamp, duration, screenshots
+  - Enable filtering and searching
+- Add export functionality:
+  - Export specific test results
+  - Export all results as archive
+  - Share via URL (future: upload to TesterArmy Web)
+
+**Success Criteria:**
+- Markdown scenarios can be parsed and executed
+- Reports are generated in multiple formats
+- Historical results are stored and retrievable
+- Results can be filtered by date, status, test name
+
+---
+
+### Phase 9: Polish (2-3 days)
+
+**Goal:** Final polish, documentation, and testing
+
+**Deliverables:**
+- Comprehensive README
+- Shell completion (bash, zsh, fish)
+- Unit and integration tests
+- CI/CD pipeline
+- Code quality audit
+
+**Details:**
+- Configuration validation:
+  - Validate JSON format on startup
+  - Check required fields (provider, model)
+  - Warn on deprecated settings
+  - Provide helpful error messages
+- Command aliases:
+  - `test` → `run`
+  - `gen` → `generate`
+  - `rep` → `report`
+- Shell completion:
+  - Generate completion scripts for bash, zsh, fish
+  - Complete file paths, command names, options
+  - Install via `tester-army completion [shell]`
+- README:
+  - Installation instructions
+  - Quick start guide
+  - Configuration reference
+  - Command documentation with examples
+  - FAQ and troubleshooting
+- Testing:
+  - Unit tests for utilities, parsers
+  - Integration tests for core workflows
+  - Mock agent-browser for CI
+  - Target 80% code coverage
+- CI/CD:
+  - GitHub Actions workflow
+  - Run tests on every PR
+  - Build and publish release
+  - Auto-generate docs on release
+
+**Success Criteria:**
+- Config validation passes for valid configs
+- Shell completion works for all commands
+- 80%+ code coverage on unit tests
+- CI pipeline passes on every PR
+- README is comprehensive and helpful
 
 ## Project Structure
 
