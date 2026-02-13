@@ -500,33 +500,40 @@ tester-army config set provider openai - Set provider
 
 ## Configuration
 
-```yaml
-# ~/.testerarmy/config.yaml
+```json
+// ~/.config/testerarmy/testerarmy.json
 
-primary_provider: openai
-model: gpt-5.3-codex
+{
+  "primary_provider": "openai",
+  "model": "gpt-5.3-codex",
+  "providers": {
+    "openai": {
+      "api_key": "${OPENAI_API_KEY}",
+      "models": ["gpt-4o", "gpt-4o-mini", "gpt-5.3-codex"]
+    },
+    "opencode": {
+      "api_key": "${OPENCODE_API_KEY}",
+      "models": ["kimi-k2.5", "kimi-k2-thinker"]
+    }
+  },
+  "worker": {
+    "parallel": 5,
+    "timeout": 60000
+  },
+  "browser": {
+    "type": "chromium",
+    "headless": true
+  }
+}
+```
 
-providers:
-  openai:
-    api_key: ${OPENAI_API_KEY}
-    models:
-      - gpt-4o
-      - gpt-4o-mini
-      - gpt-5.3-codex
-  
-  opencode:
-    api_key: ${OPENCODE_API_KEY}
-    models:
-      - kimi-k2.5
-      - kimi-k2-thinker
+**Config Location:**
+- **Linux/macOS:** `~/.config/testerarmy/testerarmy.json`
+- **Windows:** `%APPDATA%\testerarmy\testerarmy.json`
 
-worker:
-  parallel: 5
-  timeout: 60000
-
-browser:
-  type: chromium
-  headless: true
+**Environment Variables:**
+```bash
+export TESTERARMY_CONFIG_DIR=~/.config/testerarmy
 ```
 
 ## Scenario Format
@@ -560,7 +567,7 @@ browser:
 - Install dependencies (OpenTui Solid bindings, Pi packages)
 - Install agent-browser CLI
 - Configure TypeScript and ESLint
-- Set up configuration file (~/.testerarmy/config.yaml)
+- Set up configuration file (~/.config/testerarmy/testerarmy.json)
 
 ### Phase 2: Provider Integration
 - Import Pi's provider manager
@@ -611,7 +618,7 @@ browser:
 - Add export functionality
 
 ### Phase 9: Polish
-- Add configuration file support
+- Validate configuration file (~/.config/testerarmy/testerarmy.json)
 - Implement command aliases
 - Add shell completion
 - Create comprehensive README
