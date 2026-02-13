@@ -175,67 +175,81 @@ tester-army generate ./src/ - Scan project, generate scenarios
 
 ## Implementation Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation (sequential - first)
 - Set up TypeScript project with SolidJS
 - Install OpenTui, Pi packages, agent-browser CLI
-- Configure project (TypeScript, ESLint)
-- Create config file structure
+- Configure TypeScript (strict mode), ESLint
+- Create config file structure (~/.config/testerarmy/testerarmy.json)
+- Set up CI/CD pipeline (GitHub Actions)
+- **Output:** Working dev/build/test pipeline
 
-### Phase 2: Provider Integration
-- Integrate Pi's ProviderManager for LLM abstraction
+### Phase 2: Tests Infrastructure (sequential - early)
+- Set up test framework (Vitest)
+- Create test utilities (mocks, fixtures)
+- Write unit tests for config loader, utilities
+- Create mock agent-browser for isolation
+- **Output:** Test framework ready, basic tests passing
+
+### Phase 3: Provider Integration (parallelizable)
+- Integrate Pi's ProviderManager
 - Implement provider configuration UI
 - Add API key authentication
-- Support model selection
+- Write unit/integration tests for provider layer
+- **Output:** Can connect to LLM providers
 
-### Phase 3: UI Framework
-- Create App component with route-based navigation
-- Implement Home ↔ Session routes
-- Build command palette with slash commands (`/run`, `/generate`, `/config`)
-- Add keyboard shortcuts (Tab autocompletion, Ctrl+C copy)
-- Implement toast notifications
-
-### Phase 4: Browser Integration
+### Phase 4: Browser Integration (parallelizable)
 - Create agent-browser wrapper (open, snapshot, click, type, screenshot)
 - Implement session management (createSession, useSession, closeSession)
 - Parse refs (@e1, @e2) from snapshots
-- Handle errors and retries
+- Write unit/integration tests for browser wrapper
+- **Output:** Browser automation working
 
-### Phase 5: Agent Loop
+### Phase 5: Agent Loop (depends on Phase 4)
 - Build agent with Pi's agent loop
 - Add browser tools (from Phase 4)
 - Add assertion tools (text, URL, title verification)
-- Implement test execution flow
-- Collect pass/fail results
+- Write tests for agent execution flow
+- **Output:** Agent can execute tests
 
-### Phase 6: Chat Interface
+### Phase 6: UI Framework (parallelizable)
+- Create App component with route-based navigation
+- Implement Home ↔ Session routes
+- Build command palette (`/run`, `/generate`, `/config`)
+- Add keyboard shortcuts, toast notifications
+- Write component tests
+- **Output:** UI shell working
+
+### Phase 7: Chat Interface (depends on Phase 6)
 - Create message components (UserMessage, AssistantMessage, TestResult)
 - Implement scrollable message list with sticky scroll
 - Add progress indicators (spinner, elapsed time)
-- Display test results with screenshots on failure
+- Display test results with screenshots
+- Write component/integration tests
+- **Output:** Full chat interface working
 
-### Phase 7: Browser Orchestration & Workers
-- **Browser Orchestration:** Coordinate multiple browsers across workers
-- **Session Orchestration:** Assign browsers to workers, handle lifecycle
-- Create worker process spawning (child_process.spawn)
-- Implement parallel execution (configurable concurrency)
-- Aggregate results from all workers
-- Handle timeouts and failures
+### Phase 8: Orchestration & Workers (depends on Phase 4,5,7)
+- Browser orchestration: coordinate multiple browsers
+- Worker process spawning (child_process.spawn)
+- Parallel execution (configurable concurrency)
+- Result aggregation from workers
+- Handle timeouts, failures
+- Write integration tests
+- **Output:** Parallel test execution working
 
-### Phase 8: Scenarios
+### Phase 9: Scenarios (parallelizable)
 - Build markdown scenario parser
+- Generate scenarios from project files
 - Store test history (~/.local/share/testerarmy/results)
-- Results shown in TUI (separate reports in future phase)
+- Write tests for parser, generator
+- **Output:** Scenario management working
 
-### Phase 9: Tests & Polish
-- **Writing Tests:**
-  - Unit tests for utilities, parsers, config
-  - Integration tests for core workflows
-  - Mock agent-browser for CI testing
-  - Target 80%+ code coverage
+### Phase 10: Polish & Release
 - Validate configuration
 - Add shell completion (bash, zsh, fish)
 - Create comprehensive README
-- Set up CI/CD
+- Ensure 80%+ code coverage
+- Final integration tests
+- Release v1.0.0
 
 ## Project Structure
 
