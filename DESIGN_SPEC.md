@@ -13,6 +13,13 @@ TesterArmy CLI is an autonomous AI-powered QA testing agent specialized in softw
 - Isolated browser sessions for each test
 - Natural language test authoring
 
+**Scenario Management:**
+The main agent not only executes tests but also **generates and maintains test scenarios** as the codebase evolves. This includes:
+- **Auto-generation:** Scan project files and generate relevant test scenarios
+- **Maintenance:** Detect UI changes and update test scenarios accordingly
+- **Refactoring:** Adapt test scenarios when application code changes
+- **Coverage analysis:** Identify untested areas and suggest new scenarios
+
 **Note:** PR integration and automated test execution on pull requests is handled by TesterArmy Web. This CLI focuses on local test development and execution.
 
 **Stack:**
@@ -33,27 +40,33 @@ TesterArmy CLI is an autonomous AI-powered QA testing agent specialized in softw
 │  │  - Worker orchestration                                │   │
 │  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│                     Pi Library Layer                            │
+│                     Pi Library Layer (pi-mono)                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Provider Manager                                        │   │
 │  │  - 15+ providers (OpenAI, Anthropic, Google, etc.)      │   │
-│  │  - API key & OAuth authentication                        │   │
+│  │  - API key & OAuth authentication                       │   │
 │  │  - Custom providers via models.json                     │   │
+│  │  - Model switching mid-session                          │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Agent Loop                                              │   │
-│  │  - Completion with tools                                │   │
-│  │  - Extension system                                     │   │
-│  │  - Session management                                   │   │
+│  │  - Completion with tools integration                    │   │
+│  │  - Extension system (TypeScript modules)               │   │
+│  │  - Skills (capability packages)                        │   │
+│  │  - Prompt templates (reusable Markdown prompts)        │   │
+│  │  - Context management (compaction, summarization)      │   │
+│  │  - Tree-structured session history                     │   │
 │  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                     agent-browser                              │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Rust CLI + Node.js Daemon                              │   │
-│  │  - 50+ commands (open, snapshot, click, screenshot)     │   │
-│  │  - Ref-based interaction (@e1, @e2)                    │   │
-│  │  - Multiple isolated sessions                           │   │
-│  │  - Compact output (~200-400 tokens vs ~3000-5000)        │   │
+│  │  Rust CLI + Node.js Daemon (Playwright-based)          │   │
+│  │  - Client-daemon architecture for performance           │   │
+│  │  - 50+ commands (navigation, forms, screenshots)       │   │
+│  │  - Ref-based interaction (@e1, @e2) - deterministic    │   │
+│  │  - Multiple isolated sessions (separate auth)          │   │
+│  │  - Compact output (~200-400 tokens vs ~3000-5000 DOM)   │   │
+│  │  - Cross-platform (macOS, Linux, Windows ARM64/x64)    │   │
 │  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Worker Layer                               │
@@ -64,6 +77,213 @@ TesterArmy CLI is an autonomous AI-powered QA testing agent specialized in softw
 │     ↕            ↕            ↕            ↕                  │
 │  agent-browser instances (isolated sessions)                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+## OpenTui Integration (React Bindings)
+
+TesterArmy CLI uses **OpenTui with React bindings** for the terminal user interface. This provides a familiar React-like development experience for building TUI applications.
+
+### Installation
+
+```bash
+bun add @opentui/react @opentui/core react
+```
+
+### TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
+    "strict": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+### Core Components
+
+#### Layout & Display
+- `<text>` - Text display with styling
+- `<box>` - Container with borders and layout
+- `<scroll>` - Scrollable container
+- `<figtext>` - ASCII art text
+
+#### Input
+- `<input>` - Single-line text input
+- `<textarea>` - Multi-line text input
+- `<list>` - Selection list
+- `<tabs>` - Tab-based selection
+
+#### Code & Diff
+- `<code>` - Syntax-highlighted code
+- `<line>` - Line numbers with diff/diagnostic support
+- `<diff>` - Unified or split diff viewer
+- `<markdown>` - Markdown rendering
+
+### Hooks
+
+#### useRenderer()
+Access the OpenTUI renderer instance for console output and debugging.
+
+```typescript
+import { useRenderer } from "@opentui/react"
+
+function App() {
+  const renderer = useRenderer()
+  
+  useEffect(() => {
+    renderer.console.show()
+    console.log("Hello from console!")
+  }, [])
+  
+  return <box />
+}
+```
+
+#### useKeyboard(handler, options?)
+Handle keyboard events with full key press/release support.
+
+```typescript
+import { useKeyboard } from "@opentui/react"
+
+function App() {
+  useKeyboard((event) => {
+    if (event.name === "escape") {
+      process.exit(0)
+    }
+  }, { release: true })
+  
+  return <text>Press ESC to exit</text>
+}
+```
+
+#### useOnResize(callback)
+Handle terminal resize events.
+
+```typescript
+import { useOnResize } from "@opentui/react"
+
+function App() {
+  useOnResize((width, height) => {
+    console.log(`Resized to ${width}x${height}`)
+  })
+  
+  return <text>Resize-aware component</text>
+}
+```
+
+#### useTerminalDimensions()
+Get reactive terminal dimensions.
+
+```typescript
+import { useTerminalDimensions } from "@opentui/react"
+
+function App() {
+  const { width, height } = useTerminalDimensions()
+  
+  return <text>Terminal: {width}x{height}</text>
+}
+```
+
+#### useTimeline(options?)
+Create and manage animations with timeline control.
+
+```typescript
+import { useTimeline } from "@opentui/react"
+
+function App() {
+  const [width, setWidth] = useState(0)
+  const timeline = useTimeline({ duration: 2000, loop: false })
+  
+  useEffect(() => {
+    timeline.add({ width }, {
+      width: 50,
+      duration: 2000,
+      ease: "linear",
+      onUpdate: (animation) => {
+        setWidth(animation.targets[0].width)
+      },
+    })
+  }, [])
+  
+  return <box style={{ width, backgroundColor: "#6a5acd" }} />
+}
+```
+
+### Styling
+
+Style components with direct props or the style prop:
+
+```tsx
+// Direct props
+<box backgroundColor="blue" padding={2}>
+  <text>Hello</text>
+</box>
+
+// Style prop
+<box style={{ backgroundColor: "blue", padding: 2 }}>
+  <text>Hello</text>
+</box>
+```
+
+### Text Modifiers
+
+Use inside `<text>` components:
+
+```tsx
+<text>
+  <bold>Bold text</bold>
+  <italic>Italic text</italic>
+  <underline>Underlined text</underline>
+  <color fg="red">Red text</color>
+</text>
+```
+
+### Example: Test Progress Component
+
+```tsx
+import { createCliRenderer } from "@opentui/core"
+import { createRoot, useKeyboard } from "@opentui/react"
+import { useState } from "react"
+
+function TestProgress() {
+  const [progress, setProgress] = useState(0)
+  const [status, setStatus] = useState<"running" | "passed" | "failed">("running")
+  
+  return (
+    <box style={{ border: true, padding: 2, flexDirection: "column", gap: 1 }}>
+      <text fg="#FFFF00">Test Progress</text>
+      
+      <box style={{ border: true, width: 50, height: 3 }}>
+        <progress value={progress} max={100} />
+      </box>
+      
+      <text>Progress: {progress}%</text>
+      <text fg={status === "passed" ? "green" : status === "failed" ? "red" : "#999"}>
+        Status: {status.toUpperCase()}
+      </text>
+    </box>
+  )
+}
+
+const renderer = await createCliRenderer()
+createRoot(renderer).render(<TestProgress />)
+```
+
+### React DevTools Support
+
+OpenTui React supports React DevTools for debugging:
+
+```bash
+bun add --dev react-devtools-core@7
+npx react-devtools@7
+DEV=true bun run tester-army
 ```
 
 ## Key Features
@@ -339,6 +559,7 @@ npm install -g @tester-army/cli
 
 ---
 
-*Document version: 1.0*
-*Created: 2026-02-13*
+*Document version: 1.1*
+*Updated: 2026-02-13*
+*Changes: Added scenario generation/maintenance, OpenTui React bindings details, expanded Pi/agent-browser sections*
 *Stack: OpenTui + Pi (pi-mono) + agent-browser*
