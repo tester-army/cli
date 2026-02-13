@@ -213,7 +213,9 @@ tester-army generate ./src/ - Scan project, generate scenarios
 - Add progress indicators (spinner, elapsed time)
 - Display test results with screenshots on failure
 
-### Phase 7: Worker Manager
+### Phase 7: Browser Orchestration & Workers
+- **Browser Orchestration:** Coordinate multiple browsers across workers
+- **Session Orchestration:** Assign browsers to workers, handle lifecycle
 - Create worker process spawning (child_process.spawn)
 - Implement parallel execution (configurable concurrency)
 - Aggregate results from all workers
@@ -224,11 +226,15 @@ tester-army generate ./src/ - Scan project, generate scenarios
 - Store test history (~/.local/share/testerarmy/results)
 - Results shown in TUI (separate reports in future phase)
 
-### Phase 9: Polish
+### Phase 9: Tests & Polish
+- **Writing Tests:**
+  - Unit tests for utilities, parsers, config
+  - Integration tests for core workflows
+  - Mock agent-browser for CI testing
+  - Target 80%+ code coverage
 - Validate configuration
 - Add shell completion (bash, zsh, fish)
 - Create comprehensive README
-- Write tests (unit + integration)
 - Set up CI/CD
 
 ## Project Structure
