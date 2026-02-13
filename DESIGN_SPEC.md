@@ -4,7 +4,16 @@
 
 ## Overview
 
-TesterArmy CLI is an autonomous AI-powered QA testing agent that executes E2E tests from natural language prompts.
+TesterArmy CLI is an autonomous AI-powered QA testing agent specialized in software testing. It executes E2E tests from natural language prompts with deep testing expertise including assertions, DOM traversal, network monitoring, and comprehensive error diagnosis.
+
+**Key Characteristics:**
+- Testing-first agent with specialized testing knowledge
+- Parallel browser execution for fast test suite runs
+- Self-healing capability that adapts to UI changes
+- Isolated browser sessions for each test
+- Natural language test authoring
+
+**Note:** PR integration and automated test execution on pull requests is handled by TesterArmy Web. This CLI focuses on local test development and execution.
 
 **Stack:**
 - **UI:** OpenTui (custom chat interface, test-focused)
@@ -59,11 +68,14 @@ TesterArmy CLI is an autonomous AI-powered QA testing agent that executes E2E te
 
 ## Key Features
 
+- **Testing-Focused Agent:** Specialized in software testing with deep expertise in assertions, DOM traversal, and error diagnosis
+- **Parallel Browser Execution:** Launch multiple isolated browser sessions simultaneously for fast test suite execution
 - **Natural Language Testing:** Write tests in plain English
 - **Self-Healing:** Adapts to DOM changes automatically
-- **Parallel Execution:** Multiple browser sessions
+- **Ref-Based Interaction:** Compact AI-friendly output using accessibility tree refs
 - **Multi-Provider:** OpenAI, Anthropic, Google, and more
-- **Ref-Based Interaction:** Compact AI-friendly output
+
+**Note:** PR integration and automated test execution on pull requests is handled by TesterArmy Web.
 
 ## Provider Support (from Pi)
 
@@ -317,13 +329,13 @@ npm install -g @tester-army/cli
    - Auto-fix DOM changes or suggest-and-confirm?
    - Version control for healed tests?
 
-2. **PR Integration:**
-   - GitHub Actions workflow?
-   - Comment results on PR?
-
-3. **Reporting:**
+2. **Reporting:**
    - What formats beyond HTML/JSON?
    - Dashboard integration?
+
+3. **Test Parallelization:**
+   - Optimal worker count based on system resources?
+   - Cross-browser testing support?
 
 ---
 
