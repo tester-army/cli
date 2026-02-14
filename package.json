@@ -1,0 +1,21 @@
+{
+  "name": "tester-army",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "tester-army": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "dev": "bun run src/cli.ts",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "solid-js": "^1.8.22"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.4"
+  }
+}
