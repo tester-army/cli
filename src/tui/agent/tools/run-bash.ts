@@ -181,11 +181,11 @@ export function createRunBashTool(options: RunBashToolOptions): AgentTool {
         })
         if (!allow) {
           return toolResult(
-            "Tool-call guardrail reached. No further tool execution. Provide a concise testing summary and stop.",
+            "Tool execution denied by policy. Provide a concise findings summary and stop.",
             {
               command,
               exitCode: 0,
-              reason: "tool_call_limit_reached",
+              reason: "tool_execution_denied",
               stop: true,
             },
           )

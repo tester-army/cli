@@ -8,9 +8,6 @@ import { type Message as AiMessage, type Model } from "@mariozechner/pi-ai"
 import type { ChatTurn, ToolInvocationPolicy } from "./types"
 import { buildOrchestratorTools } from "./tools"
 
-const DEFAULT_MAX_AGENT_TURNS = 50
-const DEFAULT_MAX_TOOL_CALLS = 50
-
 type AgentLoopResult =
   | {
       ok: true
@@ -27,12 +24,6 @@ type RunBashToolHandle = {
   onStatus?: (status: string) => void
   onToolResult?: (toolName: string, resultText: string, details?: unknown, isError?: boolean) => void
   onAgentLoop?: (handle: { abort: () => void; signal: AbortSignal }) => void
-}
-
-function asPositiveInt(value: string | undefined, fallback: number): number {
-  if (!value) return fallback
-  const parsed = Number.parseInt(value.trim(), 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function extractStreamingTextFromEvent(value: AgentEvent): string {
@@ -196,8 +187,6 @@ export interface AgentLoopOptions {
   onAgentLoop?: RunBashToolHandle["onAgentLoop"]
   getApiKey: (provider: string) => Promise<string | undefined> | string | undefined
   shouldAllowTool?: ToolInvocationPolicy
-  maxTurns?: number
-  maxToolCalls?: number
   systemPrompt?: string
   buildTools?: (
     getAbortSignal: () => AbortSignal | undefined,
@@ -207,67 +196,13 @@ export interface AgentLoopOptions {
 }
 
 export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoopResult> {
-  const maxTurns = options.maxTurns ?? asPositiveInt(process.env.TESTER_ARMY_MAX_AGENT_TURNS, DEFAULT_MAX_AGENT_TURNS)
-  const maxToolCalls =
-    options.maxToolCalls ?? asPositiveInt(process.env.TESTER_ARMY_MAX_TOOL_CALLS, DEFAULT_MAX_TOOL_CALLS)
-
   const contextMessages = historyToMessages(options.history, options.model)
   const loopAbort = new AbortController()
-  let toolCallCount = 0
-  let turnCount = 0
-  let stopRequested = false
-  let stopReason: string | null = null
-  let shouldStopAfterCurrentTool = false
   let abortLoop: () => void = () => {
     loopAbort.abort()
   }
 
-  const stopAtBudget = (reason: string) => {
-    if (stopRequested) {
-      return
-    }
-
-    stopRequested = true
-    stopReason = reason
-    if (options.onStatus) {
-      options.onStatus(`testing guardrail: ${reason}`)
-    }
-    abortLoop()
-  }
-
-  const buildGuardrailResult = (fallbackMessages: AgentMessage[]): AgentLoopResult => {
-    if (fallbackMessages.length === 0 || (!stopRequested && stopReason === null)) {
-      return {
-        ok: true,
-        text: "Execution request queued.",
-        modelId: options.modelId,
-      }
-    }
-
-    const toolOutputs = collectToolResultText(fallbackMessages)
-    const prefix = stopReason ?? "Testing budget limit reached"
-    return {
-      ok: true,
-      text:
-        toolOutputs.length > 0
-          ? `${prefix}. Results collected:\n\n${toolOutputs.slice(-8).join("\n\n")}`
-          : `${prefix}. No final assistant summary was produced; rerun with a higher budget if you need more checks.`,
-      modelId: options.modelId,
-    }
-  }
-
   const shouldAllowTool: ToolInvocationPolicy = (toolName, args) => {
-    const nextToolCall = toolCallCount + 1
-    if (nextToolCall > maxToolCalls) {
-      stopAtBudget(`tool-call budget reached (${maxToolCalls})`)
-      return false
-    }
-
-    toolCallCount = nextToolCall
-    if (toolCallCount === maxToolCalls) {
-      shouldStopAfterCurrentTool = true
-    }
-
     return options.shouldAllowTool ? options.shouldAllowTool(toolName, args) : true
   }
 
@@ -302,14 +237,6 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
   }
 
   const unsubscribe = agent.subscribe((event) => {
-    if (event.type === "turn_start") {
-      turnCount += 1
-      if (turnCount > maxTurns) {
-        stopAtBudget(`turn budget reached (${maxTurns})`)
-      }
-      return
-    }
-
     if (event.type === "message_update") {
       const chunk = extractStreamingTextFromEvent(event)
       if (chunk) {
@@ -337,11 +264,6 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
         Boolean((event as { isError?: boolean }).isError),
       )
     }
-
-    if (event.type === "tool_execution_end" && shouldStopAfterCurrentTool) {
-      shouldStopAfterCurrentTool = false
-      stopAtBudget(`tool-call budget reached (${maxToolCalls})`)
-    }
   })
 
   try {
@@ -353,10 +275,6 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
 
     if (isAbort) {
       unsubscribe()
-      if (stopRequested) {
-        return buildGuardrailResult(agent.state.messages as AgentMessage[])
-      }
-
       return {
         ok: true,
         text: "Agent loop stopped by user.",
@@ -379,9 +297,15 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
   const final = lastAssistantText(agent.state.messages as AgentMessage[])
   const finalText = final.trim()
   const agentError = typeof agent.state.error === "string" ? agent.state.error : undefined
+  const toolOutputs = collectToolResultText(agent.state.messages as AgentMessage[])
 
-  if (!finalText && stopRequested) {
-    return buildGuardrailResult(agent.state.messages as AgentMessage[])
+  if (!finalText && toolOutputs.length > 0) {
+    const summaryHeader = "Task completed. Latest tool results:"
+    return {
+      ok: true,
+      text: `${summaryHeader}\n\n${toolOutputs.slice(-8).join("\n\n")}`,
+      modelId: options.modelId,
+    }
   }
 
   if (!finalText && agentError) {

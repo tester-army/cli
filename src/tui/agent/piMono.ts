@@ -75,6 +75,8 @@ const SYSTEM_PROMPT =
   +
   " Prefer `python3` over `python`; do not use `python` in command examples."
   +
+  " For each testing task, run commands to collect evidence, then return a concise findings report and stop."
+  +
   " If a website test step fails (command error), stop immediately and return a concise findings report with command output; do not run extra exploratory tooling unless explicitly asked by the user."
   +
   " Use these tool capabilities when available: read, write, edit, ls, find, grep, and run_bash."
@@ -84,8 +86,6 @@ const SYSTEM_PROMPT =
   " Available toolset: run_bash, read, write, edit, ls, find, grep."
   +
   `\n\n${AGENT_BROWSER_SKILL}\n\nUse this exact skill whenever testing websites, pages, or browser workflows. For any test involving a web UI, do not use curl, wget, or plain HTTP clients.`
-  +
-  `\n\nGuardrails: testing runs are bounded. After too many turns or tool calls, stop and return the latest tool outputs so testing ends with test results.`
 
 function configPath(): string {
   return process.env.TESTER_ARMY_CONFIG ?? DEFAULT_CONFIG
