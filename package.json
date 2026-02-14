@@ -9,17 +9,32 @@
   "scripts": {
     "start": "bun run src/cli.ts",
     "dev": "bun run src/cli.ts",
-    "typecheck": "bunx tsc --noEmit"
+    "web": "bun run src/cli.ts web --no-open-browser",
+    "web:open": "bun run src/cli.ts web",
+    "typecheck": "bun run tsc -p tsconfig.json && bun run tsc -p web/tsconfig.json",
+    "lint": "bunx next lint --dir web"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "^0.52.10",
     "@mariozechner/pi-agent-core": "^0.52.10",
-    "solid-js": "^1.9.9"
+    "@mariozechner/pi-ai": "^0.52.10",
+    "@radix-ui/react-slot": "^1.1.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.521.0",
+    "next": "15.6.0-canary.58",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^2.5.4",
+    "tailwindcss": "^4.1.8",
+    "tw-animate-css": "^1.3.2"
   },
   "devDependencies": {
-    "@opentui/solid": "^0.1.79",
-    "@opentui/core": "^0.1.79",
+    "@tailwindcss/postcss": "^4.1.8",
     "@types/bun": "latest",
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.10",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "postcss": "^8.5.3",
     "typescript": "^5.5.4"
   }
 }

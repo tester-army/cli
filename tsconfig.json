@@ -7,8 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "preserve",
-    "jsxImportSource": "@opentui/solid",
+    "jsx": "react-jsx",
     "types": ["bun"],
     "baseUrl": ".",
     "paths": {

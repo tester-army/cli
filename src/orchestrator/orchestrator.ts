@@ -1,4 +1,4 @@
-import { readdir, mkdir, stat } from "node:fs/promises"
+import { readFile, readdir, mkdir, stat, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { getEnvApiKey, getOAuthApiKey, getOAuthProvider, type OAuthCredentials } from "@mariozechner/pi-ai"
 import { executeWorkerScenario, buildWorkerSessionName, closeWorkerSession, type WorkerRuntimeContext } from "./workerEngine"
@@ -97,15 +97,13 @@ function clampTimeoutMs(value: number, fallback: number) {
 type StoredConfig = Record<string, unknown>
 
 async function readStoredConfig(): Promise<StoredConfig | undefined> {
-  const file = Bun.file(ORCHESTRATOR_CONFIG_PATH)
-  if (!(await file.exists())) {
+  const configPath = ORCHESTRATOR_CONFIG_PATH
+  try {
+    const file = await readFile(configPath, "utf8")
+    return asObject(JSON.parse(file))
+  } catch {
     return
   }
-
-  return file
-    .json()
-    .then((value) => asObject(value))
-    .catch(() => undefined)
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -172,7 +170,7 @@ async function persistProviderAuth(providerId: string, credentials: OAuthCredent
 
   config.providers = providers
   await mkdir(dirname(ORCHESTRATOR_CONFIG_PATH), { recursive: true })
-  await Bun.write(ORCHESTRATOR_CONFIG_PATH, JSON.stringify(config, null, 2))
+  await writeFile(ORCHESTRATOR_CONFIG_PATH, JSON.stringify(config, null, 2), "utf8")
 }
 
 async function resolveModelApiKey(modelId: string | undefined): Promise<string | undefined> {
@@ -209,11 +207,7 @@ async function resolveModelApiKey(modelId: string | undefined): Promise<string |
 
 async function readRuntimeConfig(): Promise<{ provider?: string; apiKey?: string } | undefined> {
   const path = ORCHESTRATOR_CONFIG_PATH
-  const file = Bun.file(path)
-  const exists = await file.exists()
-  if (!exists) return undefined
-
-  const data = asObject(await file.json().catch(() => undefined))
+  const data = asObject(await readFile(path, "utf8").then((value) => JSON.parse(value)).catch(() => undefined))
   if (!data) return undefined
 
   const providers = asRecord(data.providers)
