@@ -89,6 +89,7 @@ export function createAppStore({
     setCommandMode(false);
 
     const parsed = parseCommand(raw);
+    const isSlash = raw.trim().startsWith("/");
     if (parsed.name !== "unknown" && parsed.name !== "run") {
       appendMessage(raw, "user");
       const result = await dispatchCommand(
@@ -117,10 +118,15 @@ export function createAppStore({
       await startRun(parsed.rawArgs);
       appendMessage("Run command dispatched.", "system");
     } else {
-      appendMessage(`Unknown command: ${raw}. Use /help`, "assistant");
-      setRunBusy(false);
-      setCommandBuffer("");
-      return { ok: false, message: "Unknown command" };
+      appendMessage(raw, "user");
+      setRoute("session");
+      if (isSlash) {
+        appendMessage(`Unknown command: ${raw}. Use /help`, "assistant");
+        setRunBusy(false);
+        setCommandBuffer("");
+        return { ok: false, message: "Unknown command" };
+      }
+      appendMessage("Message received. Use /run <path> to execute a scenario or /help for commands.", "assistant");
     }
 
     setRunBusy(false);

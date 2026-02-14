@@ -12,9 +12,11 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
-    "solid-js": "^1.8.22"
+    "solid-js": "^1.9.9"
   },
   "devDependencies": {
+    "@opentui/solid": "^0.1.79",
+    "@opentui/core": "^0.1.79",
     "@types/bun": "latest",
     "typescript": "^5.5.4"
   }

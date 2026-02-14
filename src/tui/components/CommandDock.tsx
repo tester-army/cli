@@ -1,52 +1,112 @@
-import { For } from "solid-js";
+import { createEffect, onMount } from "solid-js"
+import type { BorderCharacters, KeyEvent } from "@opentui/core"
+import type { TextareaRenderable } from "@opentui/core"
+import { THEME } from "../theme/opencode"
+
+const EMPTY_BORDER: BorderCharacters = {
+  topLeft: "",
+  bottomLeft: "",
+  vertical: "",
+  topRight: "",
+  bottomRight: "",
+  horizontal: " ",
+  bottomT: "",
+  topT: "",
+  cross: "",
+  leftT: "",
+  rightT: "",
+}
 
 export function CommandDock(props: {
-  commandBuffer: () => string;
-  commandMode: () => boolean;
-  isBusy: () => boolean;
-  suggestions: () => string[];
-  onCommandBuffer: (value: string) => void;
-  onSubmit: () => Promise<any>;
-  onCancelCommand: () => void;
-  onClear: () => void;
-  onSuggestionSelect: (command: string) => void;
+  commandBuffer: () => string
+  commandMode: () => boolean
+  isBusy: () => boolean
+  suggestions: () => string[]
+  onCommandBuffer: (value: string) => void
+  onSubmit: () => Promise<any>
+  onCancelCommand: () => void
+  onClear: () => void
+  onSuggestionSelect: (command: string) => void
 }) {
+  let input: TextareaRenderable | undefined
+
+  const syncBuffer = () => {
+    props.onCommandBuffer(input?.plainText ?? "")
+  }
+
+  const submit = () => {
+    if (props.isBusy()) {
+      return
+    }
+    void props.onSubmit()
+  }
+
+  const handleKeyDown = (event: KeyEvent) => {
+    if (event.name === "tab" && props.commandMode()) {
+      event.preventDefault()
+      const [first] = props.suggestions()
+      if (first) {
+        props.onSuggestionSelect(first)
+        if (input) {
+          input.setText(first)
+        }
+      }
+      return
+    }
+
+    if ((event.name === "enter" || event.name === "return") && !event.shift) {
+      event.preventDefault()
+      submit()
+    }
+  }
+
+  onMount(() => {
+    if (input && !props.isBusy()) {
+      input.focus()
+    }
+  })
+
+  createEffect(() => {
+    if (!input) return
+    const value = props.commandBuffer()
+    if (input.plainText !== value) {
+      input.setText(value)
+    }
+  })
+
   return (
-    <div style={{ borderTop: "1px solid", paddingTop: "1", marginTop: "1" }}>
-      <div style={{ display: "flex", gap: "1" }}>
-        <span>{props.commandMode() ? "cmd" : "input"}</span>
-        <input
-          value={props.commandBuffer()}
-          onInput={(event) => props.onCommandBuffer((event.target as HTMLInputElement).value)}
-          onKeyDown={async (event) => {
-            if (event.key === "Enter" && !props.isBusy()) {
-              await props.onSubmit();
-            }
-            if (event.key === "Escape") {
-              props.onCancelCommand();
-            }
-          }}
-          onKeyDownCapture={(event) => {
-            if (event.key === "Tab" && props.commandMode()) {
-              event.preventDefault();
-              const [first] = props.suggestions();
-              if (first) {
-                props.onSuggestionSelect(first);
-              }
-            }
-          }}
-          onFocus={() => void 0}
-          placeholder="Type / to run commands"
-          disabled={props.isBusy()}
-        />
-        <button onClick={() => props.onSubmit()} disabled={props.isBusy()}>
-          Enter
-        </button>
-        <button onClick={() => props.onClear()}>Clear</button>
-      </div>
-      <div style={{ marginTop: "1" }}>
-        <For each={props.suggestions()}>{(item) => <span style={{ marginRight: "1" }}>{item}</span>}</For>
-      </div>
-    </div>
-  );
+    <box
+      flexShrink={0}
+      border={["left"]}
+      borderColor={props.commandMode() ? THEME.warning : THEME.border}
+      customBorderChars={{
+        ...EMPTY_BORDER,
+        vertical: "┃",
+      }}
+      paddingLeft={2}
+      paddingRight={2}
+      paddingTop={1}
+      paddingBottom={1}
+      backgroundColor={THEME.backgroundPanel}
+    >
+      <textarea
+        ref={(value) => {
+          input = value
+          value.setText(props.commandBuffer())
+          if (!props.isBusy()) {
+            value.focus()
+          }
+        }}
+        focused
+        minHeight={1}
+        maxHeight={6}
+        textColor={THEME.text}
+        focusedTextColor={THEME.text}
+        placeholder="Message TesterArmy"
+        onContentChange={syncBuffer}
+        onKeyDown={handleKeyDown}
+        onSubmit={submit}
+      />
+    </box>
+  )
 }

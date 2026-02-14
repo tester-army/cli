@@ -28,7 +28,7 @@ export async function runMockSimulation(
     })),
   );
 
-  const timeline = [
+  const timeline: [string, number][] = [
     ["Preparing session context", 220],
     ["Opening page", 320],
     ["Taking baseline snapshot", 300],

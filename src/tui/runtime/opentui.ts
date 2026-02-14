@@ -1,61 +1,44 @@
-import type { JSX } from "solid-js";
-
-type RendererHandle = {
-  destroy: () => void | Promise<void>;
-};
+import { render } from "@opentui/solid"
+import { createCliRenderer, type CliRenderer } from "@opentui/core"
+import type { JSX } from "solid-js"
 
 export interface TuiRenderer {
-  destroy: () => void | Promise<void>;
-  onDestroy?: () => void;
+  destroy: () => void
+  done: Promise<void>
 }
 
-const dynamicImport = new Function(
-  "specifier",
-  "return import(specifier).then((mod) => mod).catch(() => null);",
-);
-
 export async function createTuiRenderer(App: () => JSX.Element): Promise<TuiRenderer> {
-  const names = ["@opentui/solid", "opentui-solid", "opentui", "@opentui/core"];
+  const stdin = process.stdin
+  const stdout = process.stdout
+  const noop = () => {}
 
-  for (const name of names) {
-    const mod = (await dynamicImport(name)) as any;
-    if (!mod) {
-      continue;
-    }
-
-    if (typeof mod.render === "function") {
-      const result: RendererHandle = await mod.render(App, {
-        fullScreen: true,
-        stdin: process.stdin,
-        stdout: process.stdout,
-      });
-      if (result && typeof result.destroy === "function") {
-        return {
-          destroy: () => result.destroy(),
-          onDestroy() {},
-        };
-      }
-    }
-
-    if (typeof mod.createRenderer === "function") {
-      const result: RendererHandle = await mod.createRenderer({
-        root: App,
-        input: process.stdin,
-        output: process.stdout,
-      });
-      if (result && typeof result.destroy === "function") {
-        return {
-          destroy: () => result.destroy(),
-          onDestroy() {},
-        };
-      }
+  if (!stdin.isTTY || !stdout.isTTY) {
+    console.warn("No OpenTUI runtime found. Falling back to non-rendered shell.")
+    return {
+      destroy: noop,
+      done: Promise.resolve(),
     }
   }
 
-  console.warn("No OpenTUI runtime found. Falling back to non-rendered shell.");
-  return {
-    destroy() {
-      // noop for fallback mode.
-    },
-  };
+  try {
+    const renderer: CliRenderer = await createCliRenderer({
+      stdin,
+      stdout,
+      useAlternateScreen: false,
+      autoFocus: false,
+      exitOnCtrlC: false,
+      useKittyKeyboard: {},
+      targetFps: 60,
+      gatherStats: false,
+    })
+    const done = render(App, renderer)
+    return {
+      destroy: () => {
+        renderer.destroy()
+      },
+      done,
+    }
+  } catch (error) {
+    throw error
+  }
 }

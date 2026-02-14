@@ -1,0 +1,33 @@
+# Node / Bun / TypeScript
+node_modules/
+.bun/
+.npm/
+
+# Build artifacts
+dist/
+build/
+coverage/
+.parcel-cache/
+.next/
+.svelte-kit/
+.vite/
+
+# TypeScript / JavaScript build artifacts
+temp/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# macOS
+.DS_Store
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+opentui/
+opencode-review/
