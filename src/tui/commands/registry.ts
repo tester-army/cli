@@ -74,7 +74,6 @@ export const commandRegistry: Record<string, CommandHandler> = {
     run: async (ctx) => {
       ctx.clearMessages();
       ctx.setRoute("session");
-      ctx.appendText("Started new chat.", "assistant");
       return { ok: true, message: "New chat started." };
     },
   },
