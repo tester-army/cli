@@ -3,7 +3,7 @@ import { useKeyboard, useRenderer, useSelectionHandler } from "@opentui/solid"
 import type { KeyEvent } from "@opentui/core"
 import type { Selection } from "@opentui/core"
 import type { Message } from "../contracts/state"
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 function kindColor(kind: Message["kind"]) {
   switch (kind) {

@@ -10,7 +10,7 @@ import {
 import type { BorderCharacters, KeyEvent, SubmitEvent } from "@opentui/core"
 import type { TextareaRenderable } from "@opentui/core"
 import { Portal } from "@opentui/solid"
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 const EMPTY_BORDER: BorderCharacters = {
   topLeft: "",

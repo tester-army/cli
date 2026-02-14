@@ -6,7 +6,7 @@ import { CommandDock } from "./components/CommandDock"
 import { HomeRoute } from "./routes/Home"
 import { SessionRoute } from "./routes/Session"
 import { ResultsRoute } from "./routes/Results"
-import { THEME } from "./theme/opencode"
+import { THEME } from "./theme/testerarmy"
 
 type CommandProps = {
   commandBuffer: () => string

@@ -1,4 +1,4 @@
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 import { CommandDock } from "../components/CommandDock"
 import { Logo } from "../components/Logo"
 

@@ -4,7 +4,7 @@ import { parseCommand } from "../commands/parse";
 import type { CommandResult } from "../contracts/commands";
 import type { Message, RouteType, TuiState, WorkerCard } from "../contracts/state";
 import {
-  chatWithPiMono,
+  chatWithQaAgent,
   defaultModelChoice,
   getPersistedActiveModel,
   listAvailableModels,
@@ -13,7 +13,7 @@ import {
   persistActiveModel,
   type ModelChoice,
   type ProviderChoice,
-} from "../agent/piMono";
+} from "../agent/qaAgent";
 
 interface AppState {
   route: () => RouteType;
@@ -365,7 +365,7 @@ export function createAppStore({
       let assistantMessageId: string | undefined;
       let assistantDraft = "";
 
-      const result = await chatWithPiMono({
+      const result = await chatWithQaAgent({
         modelId: activeModel(),
         prompt: raw,
         history,

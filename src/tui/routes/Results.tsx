@@ -1,4 +1,4 @@
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 export function ResultsRoute() {
   return (

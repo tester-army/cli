@@ -1,7 +1,7 @@
 import { CommandDock } from "../components/CommandDock"
 import { MessageStream } from "../components/MessageStream"
 import type { Message, RunState, WorkerCard } from "../contracts/state"
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 type CommandProps = {
   commandBuffer: () => string

@@ -2,7 +2,7 @@ import { commandSuggestions } from "./parse";
 import { parseCommand } from "./parse";
 import { commandRegistry } from "./registry";
 import type { CommandResult, ParsedCommand } from "../contracts/commands";
-import type { ModelChoice, ProviderChoice } from "../agent/piMono";
+import type { ModelChoice, ProviderChoice } from "../agent/qaAgent";
 
 export interface DispatchInput {
   rawInput: string;

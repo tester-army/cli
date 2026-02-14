@@ -1,5 +1,5 @@
 import { For } from "solid-js"
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 const raw = `
                  100012223210115

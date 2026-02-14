@@ -1,0 +1,15 @@
+export const THEME = {
+  background: "#1e1e2e",
+  backgroundAlt: "#181825",
+  backgroundPanel: "#313244",
+  text: "#cdd6f4",
+  muted: "#a6adc8",
+  primary: "#F97315",
+  secondary: "#89b4fa",
+  accent: "#F97315",
+  success: "#a6e3a1",
+  warning: "#f9e2af",
+  error: "#f38ba8",
+  border: "#45475a",
+  borderSubtle: "#585b70",
+}

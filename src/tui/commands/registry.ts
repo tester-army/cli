@@ -1,5 +1,5 @@
 import type { CommandResult } from "../contracts/commands";
-import type { ModelChoice, ProviderChoice } from "../agent/piMono";
+import type { ModelChoice, ProviderChoice } from "../agent/qaAgent";
 
 export type CommandContext = {
   appendText: (text: string, kind: "assistant" | "system") => void;

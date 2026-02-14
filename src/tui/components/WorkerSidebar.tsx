@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js"
 import type { WorkerCard } from "../contracts/state"
-import { THEME } from "../theme/opencode"
+import { THEME } from "../theme/testerarmy"
 
 function statusColor(status: WorkerCard["status"]) {
   switch (status) {
