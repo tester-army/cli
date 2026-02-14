@@ -12,6 +12,7 @@ type CommandProps = {
   commandBuffer: () => string
   commandMode: () => boolean
   isBusy: () => boolean
+  activeModel: () => string
   suggestions: () => string[]
   onCommandBuffer: (value: string) => void
   onSubmit: () => Promise<unknown>
@@ -32,6 +33,7 @@ function App(props: { onQuit: () => void }) {
     commandBuffer: state.commandBuffer,
     commandMode: state.commandMode,
     isBusy: state.runBusy,
+    activeModel: state.activeModel,
     suggestions: state.commandSuggestions,
     onCommandBuffer: actions.updateCommandBuffer,
     onSubmit: actions.submitCommand,

@@ -2,6 +2,7 @@ import { commandSuggestions } from "./parse";
 import { parseCommand } from "./parse";
 import { commandRegistry } from "./registry";
 import type { CommandResult, ParsedCommand } from "../contracts/commands";
+import type { ModelChoice } from "../agent/piMono";
 
 export interface DispatchInput {
   rawInput: string;
@@ -13,6 +14,9 @@ export interface DispatchContext {
   clearMessages: () => void;
   setRoute: (route: "home" | "session" | "results") => void;
   exit: () => void;
+  getActiveModel: () => string;
+  setActiveModel: (modelId: string) => void;
+  listModels: () => Promise<ModelChoice[]>;
 }
 
 export interface DispatchResult {
@@ -34,12 +38,15 @@ export async function dispatchCommand(
       clearMessages: ctx.clearMessages,
       setRoute: ctx.setRoute,
       exit: ctx.exit,
+      getActiveModel: ctx.getActiveModel,
+      setActiveModel: ctx.setActiveModel,
+      listModels: ctx.listModels,
     },
     parsed.rawArgs,
   );
 
   if (!result.ok && parsed.name === "unknown") {
-    ctx.appendText(`Unknown command: ${parsed.raw}` , "assistant");
+    ctx.appendText(`Unknown command: ${parsed.raw}`, "assistant");
   }
 
   return { parsed, result };

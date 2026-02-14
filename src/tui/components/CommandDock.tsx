@@ -1,4 +1,4 @@
-import { createEffect, onMount } from "solid-js"
+import { createEffect, onCleanup, onMount } from "solid-js"
 import type { BorderCharacters, KeyEvent } from "@opentui/core"
 import type { TextareaRenderable } from "@opentui/core"
 import { THEME } from "../theme/opencode"
@@ -31,14 +31,37 @@ export function CommandDock(props: {
   let input: TextareaRenderable | undefined
 
   const syncBuffer = () => {
-    props.onCommandBuffer(input?.plainText ?? "")
+    if (!input || input.isDestroyed) {
+      return
+    }
+
+    props.onCommandBuffer(input.plainText)
   }
 
-  const submit = () => {
+  const setInputText = (value: string) => {
+    if (!input || input.isDestroyed) {
+      return
+    }
+
+    if (input.plainText === value) {
+      return
+    }
+
+    try {
+      input.setText(value)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("EditBuffer is destroyed")) {
+        return
+      }
+      throw error
+    }
+  }
+
+  const submit = async () => {
     if (props.isBusy()) {
       return
     }
-    void props.onSubmit()
+    await props.onSubmit()
   }
 
   const handleKeyDown = (event: KeyEvent) => {
@@ -47,9 +70,6 @@ export function CommandDock(props: {
       const [first] = props.suggestions()
       if (first) {
         props.onSuggestionSelect(first)
-        if (input) {
-          input.setText(first)
-        }
       }
       return
     }
@@ -60,6 +80,10 @@ export function CommandDock(props: {
     }
   }
 
+  onCleanup(() => {
+    input = undefined
+  })
+
   onMount(() => {
     if (input && !props.isBusy()) {
       input.focus()
@@ -67,11 +91,7 @@ export function CommandDock(props: {
   })
 
   createEffect(() => {
-    if (!input) return
-    const value = props.commandBuffer()
-    if (input.plainText !== value) {
-      input.setText(value)
-    }
+    setInputText(props.commandBuffer())
   })
 
   return (
@@ -92,7 +112,7 @@ export function CommandDock(props: {
       <textarea
         ref={(value) => {
           input = value
-          value.setText(props.commandBuffer())
+          setInputText(props.commandBuffer())
           if (!props.isBusy()) {
             value.focus()
           }

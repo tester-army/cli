@@ -7,6 +7,8 @@ const KNOWN_COMMANDS = new Set<TuiCommandName>([
   "quit",
   "help",
   "clear",
+  "model",
+  "models",
 ]);
 
 export function parseCommand(input: string): ParsedCommand {

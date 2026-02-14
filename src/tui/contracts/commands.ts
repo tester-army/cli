@@ -1,4 +1,4 @@
-export type TuiCommandName = "run" | "generate" | "config" | "quit" | "help" | "clear";
+export type TuiCommandName = "run" | "generate" | "config" | "quit" | "help" | "clear" | "model" | "models";
 
 export interface CommandArg {
   name: string;

@@ -12,6 +12,8 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.52.10",
+    "@mariozechner/pi-agent-core": "^0.52.10",
     "solid-js": "^1.9.9"
   },
   "devDependencies": {
