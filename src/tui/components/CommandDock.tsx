@@ -37,6 +37,8 @@ export function CommandDock(props: {
   onClear: () => void
   onSuggestionSelect: (command: string) => void
   onDoubleEscape: () => void
+  onHistoryBack: () => void
+  onHistoryForward: () => void
 }) {
   let input: TextareaRenderable | undefined
   const [pickerIndex, setPickerIndex] = createSignal(0)
@@ -193,19 +195,21 @@ export function CommandDock(props: {
 
     if (event.name === "up") {
       event.preventDefault()
-      if (!hasSuggestions()) {
+      if (hasSuggestions()) {
+        movePickerSelection(pickerIndex() - 1)
         return
       }
-      movePickerSelection(pickerIndex() - 1)
+      props.onHistoryBack()
       return
     }
 
     if (event.name === "down") {
       event.preventDefault()
-      if (!hasSuggestions()) {
+      if (hasSuggestions()) {
+        movePickerSelection(pickerIndex() + 1)
         return
       }
-      movePickerSelection(pickerIndex() + 1)
+      props.onHistoryForward()
       return
     }
 

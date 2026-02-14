@@ -14,6 +14,8 @@ type CommandProps = {
   onClear: () => void
   onSuggestionSelect: (command: string) => void
   onDoubleEscape: () => void
+  onHistoryBack: () => void
+  onHistoryForward: () => void
 }
 
 export function HomeRoute(props: CommandProps) {

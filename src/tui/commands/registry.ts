@@ -104,6 +104,17 @@ export const commandRegistry: Record<string, CommandHandler> = {
     description: "List available AI models from the registry",
     run: async (ctx, args) => {
       const models = await ctx.listModels();
+      const providers = await ctx.listProviders();
+      const authorizedProviderIds = new Set(
+        providers.filter((provider) => provider.authenticated).map((provider) => provider.id),
+      );
+      const authorizedModels = models.filter((item) => authorizedProviderIds.has(item.provider));
+
+      if (authorizedModels.length === 0) {
+        ctx.appendText("No authorized model options were found. Authorize a provider first.", "assistant");
+        return { ok: false, message: "No authorized model options found." };
+      }
+
       if (models.length === 0) {
         ctx.appendText("No model options were found.", "assistant");
         return { ok: false, message: "No model options found." };
@@ -111,7 +122,9 @@ export const commandRegistry: Record<string, CommandHandler> = {
       const requested = parseArg(args);
       const normalizedRequested = parseArg(requested);
       const filtered =
-        normalizedRequested === "" ? models : models.filter((item) => item.provider === normalizedRequested);
+        normalizedRequested === ""
+          ? authorizedModels
+          : authorizedModels.filter((item) => item.provider === normalizedRequested);
 
       if (normalizedRequested && filtered.length === 0) {
         const requestedProvider = requested ? requested : "the selected provider";

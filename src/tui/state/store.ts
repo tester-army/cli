@@ -33,6 +33,8 @@ interface AppActions {
   updateCommandBuffer: (value: string) => void;
   submitCommand: (text?: string) => Promise<CommandResult>;
   cancelCommand: () => void;
+  historyBack: () => void;
+  historyForward: () => void;
   stopActiveRun: () => Promise<void>;
   clearCommandBuffer: () => void;
   selectSuggestion: (command: string) => void;
@@ -79,7 +81,20 @@ export function createAppStore({
   const [availableModels, setAvailableModels] = createSignal<ModelChoice[]>([]);
   const [availableProviders, setAvailableProviders] = createSignal<string[]>([]);
   const [availableOAuthProviders, setAvailableOAuthProviders] = createSignal<string[]>([]);
+  const [commandHistory, setCommandHistory] = createSignal<string[]>([]);
+  const [commandHistoryIndex, setCommandHistoryIndex] = createSignal(-1);
+  let isApplyingHistory = false;
   let stopCurrentAgentLoop: (() => void) | null = null;
+
+  const setCommandBufferFromHistory = (nextValue: string, nextIndex: number) => {
+    isApplyingHistory = true;
+    setCommandHistoryIndex(nextIndex);
+    setCommandBuffer(nextValue);
+    setCommandMode(nextValue.startsWith("/"));
+    queueMicrotask(() => {
+      isApplyingHistory = false;
+    });
+  };
 
   const latestSuggestions = createMemo(() =>
     commandAutosuggest(
@@ -165,6 +180,20 @@ export function createAppStore({
     );
   };
 
+  const appendStreamingAssistantMessage = () => appendMessage("", "assistant");
+
+  const appendChunkToMessage = (messageId: string, chunk: string) => {
+    if (!chunk) {
+      return;
+    }
+
+    setMessages((prev) =>
+      prev.map((entry) =>
+        entry.id === messageId ? { ...entry, text: `${entry.text}${chunk}` } : entry,
+      ),
+    );
+  };
+
   const clearMessages = () => setMessages([]);
 
   const setActiveModelAndProvider = (nextModel: string) => {
@@ -239,6 +268,12 @@ export function createAppStore({
     if (!raw.trim()) {
       return { ok: false, message: "No command provided" };
     }
+
+    setCommandHistory((previous) => {
+      const next = [...previous, raw];
+      return next.length > 80 ? next.slice(-80) : next;
+    });
+    setCommandHistoryIndex(-1);
 
     setCommandBuffer("");
     setRunBusy(true);
@@ -327,15 +362,19 @@ export function createAppStore({
         return { ok: false, message: "Unknown command" };
       }
 
-      let assistantDraft = "";
       let assistantMessageId: string | undefined;
+      let assistantDraft = "";
 
       const result = await chatWithPiMono({
         modelId: activeModel(),
         prompt: raw,
         history,
         onChunk: (chunk) => {
+          if (!assistantMessageId) {
+            assistantMessageId = appendStreamingAssistantMessage();
+          }
           assistantDraft += chunk;
+          appendChunkToMessage(assistantMessageId, chunk);
         },
         onStatus: (status) => {
           if (status.startsWith("tool:")) {
@@ -352,19 +391,20 @@ export function createAppStore({
         },
       });
 
-      if (!result.ok) {
-        if (assistantMessageId) {
-          replaceMessageText(assistantMessageId, result.message);
-        } else {
-          appendMessage(result.message, "assistant");
+        if (!result.ok) {
+          if (assistantMessageId) {
+            replaceMessageText(assistantMessageId, result.message);
+          } else {
+            appendMessage(result.message, "assistant");
         }
         return { ok: false, message: result.message };
       }
 
       const finalText = (result.text || assistantDraft || "Execution request queued.").trim();
-      assistantMessageId = appendMessage(finalText, "assistant");
-      if (assistantDraft && result.text && assistantDraft !== result.text) {
-        replaceMessageText(assistantMessageId, result.text);
+      if (assistantMessageId) {
+        replaceMessageText(assistantMessageId, finalText);
+      } else {
+        assistantMessageId = appendMessage(finalText, "assistant");
       }
 
       await refreshCatalog();
@@ -404,16 +444,51 @@ export function createAppStore({
         setCommandBuffer(value);
         const shouldOpen = value.startsWith("/");
         setCommandMode(shouldOpen);
+        if (!isApplyingHistory) {
+          setCommandHistoryIndex(-1);
+        }
+      },
+      historyBack() {
+        const history = commandHistory();
+        if (history.length === 0) {
+          return;
+        }
+
+        const current = commandHistoryIndex();
+        const next = current === -1 ? history.length - 1 : Math.max(current - 1, 0);
+        setCommandBufferFromHistory(history[next], next);
+      },
+      historyForward() {
+        const history = commandHistory();
+        const current = commandHistoryIndex();
+        if (history.length === 0 || current === -1) {
+          setCommandHistoryIndex(-1);
+          setCommandBuffer("");
+          setCommandMode(false);
+          return;
+        }
+
+        if (current >= history.length - 1) {
+          setCommandHistoryIndex(-1);
+          setCommandBuffer("");
+          setCommandMode(false);
+          return;
+        }
+
+        const next = current + 1;
+        setCommandBufferFromHistory(history[next], next);
       },
       submitCommand: run,
       stopActiveRun,
       cancelCommand() {
         setCommandMode(false);
         setCommandBuffer("");
+        setCommandHistoryIndex(-1);
       },
       clearCommandBuffer() {
         setCommandBuffer("");
         setCommandMode(false);
+        setCommandHistoryIndex(-1);
       },
       selectSuggestion(command) {
         setCommandBuffer(command);
