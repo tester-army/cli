@@ -78,6 +78,16 @@ export const commandRegistry: Record<string, CommandHandler> = {
       return { ok: true, message: "Message stream cleared." };
     },
   },
+  new: {
+    name: "new",
+    description: "Start a new chat session",
+    run: async (ctx) => {
+      ctx.clearMessages();
+      ctx.setRoute("session");
+      ctx.appendText("Started new chat.", "assistant");
+      return { ok: true, message: "New chat started." };
+    },
+  },
   help: {
     name: "help",
     description: "Show command list",
@@ -93,6 +103,7 @@ export const commandRegistry: Record<string, CommandHandler> = {
         "/login [provider]",
         "/config",
         "/clear",
+        "/new",
         "/quit",
         "/help",
       ].join("\n");

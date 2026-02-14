@@ -12,6 +12,7 @@ const KNOWN_COMMANDS = new Set<TuiCommandName>([
   "login",
   "model",
   "models",
+  "new",
 ]);
 
 type SuggestionOptions = {

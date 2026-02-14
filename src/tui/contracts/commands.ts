@@ -5,6 +5,7 @@ export type TuiCommandName =
   | "quit"
   | "help"
   | "clear"
+  | "new"
   | "model"
   | "models"
   | "provider"
