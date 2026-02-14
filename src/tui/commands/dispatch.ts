@@ -10,7 +10,6 @@ export interface DispatchInput {
 
 export interface DispatchContext {
   appendText: (text: string, kind: "assistant" | "system") => void;
-  startRun: (args: string) => Promise<void>;
   clearMessages: () => void;
   setRoute: (route: "home" | "session" | "results") => void;
   exit: () => void;
@@ -36,7 +35,6 @@ export async function dispatchCommand(
   const result = await handler.run(
     {
       appendText: ctx.appendText,
-      startRun: ctx.startRun,
       clearMessages: ctx.clearMessages,
       setRoute: ctx.setRoute,
       exit: ctx.exit,

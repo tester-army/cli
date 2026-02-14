@@ -1,7 +1,6 @@
 import type { ParsedCommand, TuiCommandName } from "../contracts/commands";
 
 const KNOWN_COMMANDS = new Set<TuiCommandName>([
-  "run",
   "generate",
   "config",
   "quit",

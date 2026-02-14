@@ -1,8 +1,4 @@
-import {
-  Agent,
-  type AgentEvent,
-  type AgentMessage,
-} from "@mariozechner/pi-agent-core"
+import { runAgentLoop } from "./session"
 import {
   getModel,
   getModels,
@@ -11,60 +7,85 @@ import {
   getOAuthProvider,
   getOAuthProviders,
   getEnvApiKey,
-  type Message as AiMessage,
   type Model,
   type OAuthCredentials,
 } from "@mariozechner/pi-ai"
+import {
+  type AgentResult,
+  type ChatInput,
+  type ChatTurn,
+  type LoginWithProviderResult,
+  type ModelChoice,
+  type ProviderChoice,
+  type RuntimeSettings,
+} from "./types"
 import { dirname } from "node:path"
 import { mkdir } from "node:fs/promises"
 
-type ChatTurn = {
-  role: "user" | "assistant"
-  content: string
-}
-
-export type ModelChoice = {
-  id: string
-  provider: string
-  model: string
-  label: string
-}
-
-export type ProviderChoice = {
-  id: string
-  name: string
-  requiresOAuth: boolean
-  authenticated: boolean
-}
-
-export type LoginWithProviderResult = {
-  ok: boolean
-  message: string
-}
-
-export type AgentResult =
-  | {
-      ok: true
-      text: string
-      modelId: string
-    }
-  | {
-      ok: false
-      message: string
-    }
-
-export type ChatInput = {
-  modelId: string
-  prompt: string
-  history: ChatTurn[]
-  onChunk: (chunk: string) => void
-  onStatus?: (status: string) => void
-}
+export * from "./types"
 
 const DEFAULT_CONFIG = `${process.env.HOME ?? ""}/.config/testerarmy/testerarmy.json`
 const DEFAULT_MODEL = "openai:gpt-5-mini"
+const AGENT_BROWSER_SKILL = `name: agent-browser
+description: Browser automation with agent-browser for AI agents.
+triggers:
+  - open
+  - click
+  - fill
+  - screenshot
+  - test web app
+  - web automation
+  - scrape
+allowed-tools: Bash(agent-browser:*)
+
+# Browser Automation with agent-browser
+
+Core workflow:
+1. \`npx agent-browser open <url>\`
+2. \`npx agent-browser snapshot -i\` to gather refs (\`@e1\`, \`@e2\`)
+3. interact with refs (\`click\`, \`fill\`, \`select\`, \`check\`, \`press\`)
+4. re-snapshot after navigation or DOM changes
+
+## Must-know commands
+
+- \`npx agent-browser open\`, \`npx agent-browser close\`, \`npx agent-browser snapshot -i\`, \`npx agent-browser snapshot -i -C\`, \`npx agent-browser snapshot -s \"#selector\"\`
+- \`npx agent-browser click @e1\`, \`npx agent-browser fill @e2 \"text\"\`, \`npx agent-browser type\`, \`npx agent-browser select\`, \`npx agent-browser check\`, \`npx agent-browser press\`
+- \`npx agent-browser wait\`, \`npx agent-browser wait --load networkidle\`, \`npx agent-browser wait --url \"**/x\"\`
+- \`npx agent-browser get text @e1\`, \`npx agent-browser get url\`, \`npx agent-browser get title\`
+- \`npx agent-browser screenshot\`, \`npx agent-browser screenshot --full\`, \`npx agent-browser pdf output.pdf\`
+- \`npx agent-browser state save/load\`, \`npx agent-browser --session <name>\`, \`npx agent-browser session list\`
+
+## Important rules
+
+- Refs are invalidated on page change; always re-snapshot after navigation or dynamic updates.
+- Prefer semantic fallback (\`find text\`, \`find label\`, \`find role\`) when refs are missing.
+- For complex JS evaluation, use \`eval --stdin\`/\`-b\`.
+- Visual debugging: \`--headed\`, \`highlight\`, \`record start\`.
+
+## Platform notes
+
+- macOS-first support for local desktop/browser flows.
+- Supports local files and optional mobile iOS session workflows.`
 const SYSTEM_PROMPT =
-  "You are TesterArmy assistant. Keep responses practical and concise. Prefer actionable next steps for testing and automation."
+  "You are TesterArmy, an AI testing assistant. Keep responses practical and concise. Prefer actionable next steps."
+  +
+  " Treat every testing task as one-shot manual action: run shell commands directly yourself and report results with evidence."
+  +
+  " Testing tasks should use only run_bash with npx agent-browser commands for any website or UI interaction checks."
+  +
+  " Prefer `python3` over `python`; do not use `python` in command examples."
+  +
+  " If a website test step fails (command error), stop immediately and return a concise findings report with command output; do not run extra exploratory tooling unless explicitly asked by the user."
+  +
+  " Use these tool capabilities when available: read, write, edit, ls, find, grep, and run_bash."
+  +
+  " Never instruct people to type CLI commands for execution. Use tools naturally."
+  +
+  " Available toolset: run_bash, read, write, edit, ls, find, grep."
+  +
+  `\n\n${AGENT_BROWSER_SKILL}\n\nUse this exact skill whenever testing websites, pages, or browser workflows. For any test involving a web UI, do not use curl, wget, or plain HTTP clients.`
+  +
+  `\n\nGuardrails: testing runs are bounded. After too many turns or tool calls, stop and return the latest tool outputs so testing ends with test results.`
 
 function configPath(): string {
   return process.env.TESTER_ARMY_CONFIG ?? DEFAULT_CONFIG
@@ -74,12 +95,6 @@ function asNumber(record: Record<string, unknown> | undefined, key: string): num
   const value = record?.[key]
   if (typeof value !== "number") return
   return Number.isFinite(value) ? value : undefined
-}
-
-type RuntimeSettings = {
-  baseUrl?: string
-  apiKey?: string
-  provider?: string
 }
 
 type StoredConfig = Record<string, unknown>
@@ -208,9 +223,7 @@ function buildModelChoicesFromRaw(rawCandidates: string[]): ModelChoice[] {
 }
 
 function uniqueSorted(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean).map((value) => value.trim()))).sort((a, b) =>
-    a.localeCompare(b),
-  )
+  return Array.from(new Set(values.filter(Boolean).map((value) => value.trim()))).sort((a, b) => a.localeCompare(b))
 }
 
 function collectConfiguredModelValues(data: Record<string, unknown> | undefined): string[] {
@@ -244,108 +257,10 @@ function collectConfiguredModelValues(data: Record<string, unknown> | undefined)
   return Array.from(values)
 }
 
-function extractStreamingTextFromEvent(value: AgentEvent): string {
-  if (value.type !== "message_update") return ""
-
-  const payload = (value as { assistantMessageEvent?: unknown }).assistantMessageEvent
-  if (!payload || typeof payload !== "object") return ""
-  const record = payload as { type?: string; delta?: string; content?: unknown; text?: string; thinking?: string }
-
-  if (typeof record.delta === "string" && record.delta.length > 0) return record.delta
-  if (typeof record.text === "string" && record.text.length > 0) return record.text
-
-  if (record.type === "text_delta" && typeof record.delta === "string") {
-    return record.delta
-  }
-
-  return ""
-}
-
-function extractTextFromMessage(message: AgentMessage): string {
-  if (typeof (message as { text?: string }).text === "string") {
-    return (message as { text?: string }).text ?? ""
-  }
-
-  const content = (message as { content?: unknown }).content
-  if (!content || !Array.isArray(content)) return ""
-
-  return content
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return ""
-      const block = entry as { type?: string; text?: string; thinking?: string }
-      if (block.type === "text" && typeof block.text === "string") return block.text
-      if (block.type === "thinking" && typeof block.thinking === "string") return block.thinking
-      return ""
-    })
-    .join("")
-}
-
-function lastAssistantText(messages: AgentMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i]
-    if ((message as { role?: string }).role === "assistant") {
-      return extractTextFromMessage(message)
-    }
-  }
-  return ""
-}
-
-function usageZero() {
-  return {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    totalTokens: 0,
-    cost: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      total: 0,
-    },
-  }
-}
-
-function historyToMessages(history: ChatTurn[], model: Model<any>): AiMessage[] {
-  return history
-    .filter((entry) => entry.content.trim().length > 0)
-    .map((entry) => {
-      const content: { type: "text"; text: string }[] = [
-        {
-          type: "text",
-          text: entry.content,
-        },
-      ]
-
-      if (entry.role === "assistant") {
-        return {
-          role: "assistant" as const,
-          content,
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
-          usage: usageZero(),
-          stopReason: "stop",
-          timestamp: Date.now(),
-        }
-      }
-
-      return {
-        role: "user" as const,
-        content,
-        timestamp: Date.now(),
-      }
-    })
-}
-
 function syncProviderConfig(settings: RuntimeSettings | undefined) {
   if (!settings?.apiKey) return
 
   const provider = (settings.provider ?? "openai").trim().toLowerCase()
-  if (provider === "openai" || provider === "openai-compatible") {
-    process.env.OPENAI_API_KEY = settings.apiKey
-  }
   process.env.OPENAI_API_KEY = provider === "openai" || provider === "openai-compatible" ? settings.apiKey : process.env.OPENAI_API_KEY
   process.env.GEMINI_API_KEY = provider === "google" ? settings.apiKey : process.env.GEMINI_API_KEY
   process.env.ANTHROPIC_API_KEY = provider === "anthropic" ? settings.apiKey : process.env.ANTHROPIC_API_KEY
@@ -627,63 +542,18 @@ export async function chatWithAgentCore(input: ChatInput): Promise<AgentResult> 
     syncProviderConfig(settings)
   }
 
-  const contextMessages = historyToMessages(input.history, model)
-  const agent = new Agent({
-    initialState: {
-      systemPrompt: SYSTEM_PROMPT,
-      model,
-      thinkingLevel: "off",
-      tools: [],
-      messages: contextMessages as AgentMessage[],
-    },
-    getApiKey: (provider) => resolveApiKey(provider),
-  })
-
-  const unsubscribe = agent.subscribe((event) => {
-    if (event.type === "message_update") {
-      const chunk = extractStreamingTextFromEvent(event)
-      if (chunk) {
-        input.onChunk(chunk)
-      }
-    }
-
-    if (event.type === "tool_execution_start" && input.onStatus) {
-      input.onStatus(`tool:${event.toolCallId} ${event.toolName}`)
-    }
-
-    if (event.type === "tool_execution_end" && input.onStatus) {
-      const status = event.isError ? "error" : "complete"
-      input.onStatus(`tool:${event.toolName} ${status}`)
-    }
-  })
-
-  try {
-    await agent.prompt(input.prompt)
-    await agent.waitForIdle()
-  } catch (error) {
-    unsubscribe()
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Agent invocation failed.",
-    }
-  }
-
-  unsubscribe()
-
-  const final = lastAssistantText(agent.state.messages as AgentMessage[])
-  if (!final.trim()) {
-    return {
-      ok: false,
-      message:
-        "The agent did not produce any assistant content. Check that your model has API access and can generate output.",
-    }
-  }
-
-  return {
-    ok: true,
-    text: final,
+  return runAgentLoop({
+    model,
     modelId: `${model.provider}:${model.id}`,
-  }
+    prompt: input.prompt,
+    history: input.history,
+    onChunk: input.onChunk,
+    onStatus: input.onStatus,
+    onToolResult: input.onToolResult,
+    onAgentLoop: input.onAgentLoop,
+    getApiKey: resolveApiKey,
+    systemPrompt: SYSTEM_PROMPT,
+  })
 }
 
 export async function chatWithPiMono(input: ChatInput): Promise<AgentResult> {

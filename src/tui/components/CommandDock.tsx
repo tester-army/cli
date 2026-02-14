@@ -36,10 +36,13 @@ export function CommandDock(props: {
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
+  onDoubleEscape: () => void
 }) {
   let input: TextareaRenderable | undefined
   const [pickerIndex, setPickerIndex] = createSignal(0)
+  const [lastEscapePressAt, setLastEscapePressAt] = createSignal(0)
   const maxVisibleSuggestions = 6
+  const DOUBLE_ESCAPE_MS = 500
 
   const suggestions = () => props.suggestions()
   const hasSuggestions = createMemo(() => props.commandMode() && suggestions().length > 0)
@@ -175,6 +178,10 @@ export function CommandDock(props: {
   }
 
   const handleKeyDown = async (event: KeyEvent) => {
+    if (event.name !== "escape") {
+      setLastEscapePressAt(0)
+    }
+
     if (event.name === "tab" && props.commandMode()) {
       event.preventDefault()
       const next = activeSuggestion()
@@ -217,9 +224,21 @@ export function CommandDock(props: {
     if (event.name === "escape") {
       if (hasSuggestions()) {
         event.preventDefault()
+        setLastEscapePressAt(0)
         setPickerIndex(0)
         props.onCancelCommand()
         return
+      }
+
+      const now = Date.now()
+      const lastPress = lastEscapePressAt()
+      setLastEscapePressAt(now)
+      if (lastPress && now - lastPress < DOUBLE_ESCAPE_MS) {
+        setLastEscapePressAt(0)
+        event.preventDefault()
+        props.onDoubleEscape()
+      } else {
+        event.preventDefault()
       }
       return
     }

@@ -1,5 +1,4 @@
 export type TuiCommandName =
-  | "run"
   | "generate"
   | "config"
   | "quit"

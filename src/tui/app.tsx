@@ -19,6 +19,7 @@ type CommandProps = {
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
+  onDoubleEscape: () => void
 }
 
 function App(props: { onQuit: () => void }) {
@@ -40,6 +41,7 @@ function App(props: { onQuit: () => void }) {
     onCancelCommand: actions.cancelCommand,
     onClear: actions.clearCommandBuffer,
     onSuggestionSelect: actions.selectSuggestion,
+    onDoubleEscape: actions.stopActiveRun,
   }
 
   return (

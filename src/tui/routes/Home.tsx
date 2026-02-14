@@ -13,6 +13,7 @@ type CommandProps = {
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
+  onDoubleEscape: () => void
 }
 
 export function HomeRoute(props: CommandProps) {

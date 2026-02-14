@@ -3,7 +3,6 @@ import { dispatchCommand, commandAutosuggest } from "../commands/dispatch";
 import { parseCommand } from "../commands/parse";
 import type { CommandResult } from "../contracts/commands";
 import type { Message, RouteType, TuiState, WorkerCard } from "../contracts/state";
-import { runMockSimulation } from "../dev-sim/simulation";
 import {
   chatWithPiMono,
   defaultModelChoice,
@@ -34,6 +33,7 @@ interface AppActions {
   updateCommandBuffer: (value: string) => void;
   submitCommand: (text?: string) => Promise<CommandResult>;
   cancelCommand: () => void;
+  stopActiveRun: () => Promise<void>;
   clearCommandBuffer: () => void;
   selectSuggestion: (command: string) => void;
   seedWelcome: () => void;
@@ -79,6 +79,7 @@ export function createAppStore({
   const [availableModels, setAvailableModels] = createSignal<ModelChoice[]>([]);
   const [availableProviders, setAvailableProviders] = createSignal<string[]>([]);
   const [availableOAuthProviders, setAvailableOAuthProviders] = createSignal<string[]>([]);
+  let stopCurrentAgentLoop: (() => void) | null = null;
 
   const latestSuggestions = createMemo(() =>
     commandAutosuggest(
@@ -107,6 +108,34 @@ export function createAppStore({
     const next = message(text, kind);
     setMessages((prev) => [...prev, next]);
     return next.id;
+  };
+
+  const appendToolMessage = (text: string): string =>
+    appendMessage(`Tool: ${text}`, "tool");
+
+  const formatToolResultText = (resultText: string | undefined, details?: unknown): string => {
+    if (!details) {
+      return resultText || "No result";
+    }
+
+    let renderedDetails = "";
+    try {
+      if (typeof details === "string") {
+        renderedDetails = details;
+      } else if (Array.isArray(details)) {
+        renderedDetails = JSON.stringify(details);
+      } else {
+        renderedDetails = JSON.stringify(details);
+      }
+    } catch (error) {
+      renderedDetails = "Unable to encode result details";
+    }
+
+    if (!renderedDetails || renderedDetails === "{}") {
+      return resultText || "Tool executed";
+    }
+
+    return `${resultText || "Tool executed"}\n${renderedDetails}`;
   };
 
   const appendStreamingAssistantMessage = () => appendMessage("", "assistant");
@@ -139,10 +168,6 @@ export function createAppStore({
 
   const pushToast = (text: string) =>
     setToasts((prev) => [...prev.slice(-3), text]);
-
-  const applyWorkerUpdate = (next: WorkerCard[]) => {
-    setWorkers(next);
-  };
 
   const syncModelState = async () => {
     const choices = await listAvailableModels().catch(() => []);
@@ -215,7 +240,7 @@ export function createAppStore({
     try {
       const parsed = parseCommand(raw);
       const isSlash = raw.trim().startsWith("/");
-      if (parsed.name !== "unknown" && parsed.name !== "run") {
+      if (parsed.name !== "unknown") {
         setRoute("session");
         appendMessage(raw, "user");
         const result = await dispatchCommand(
@@ -224,7 +249,6 @@ export function createAppStore({
             appendText: (text: string, kind: "assistant" | "system") => {
               appendMessage(text, kind);
             },
-            startRun,
             clearMessages,
             setRoute: (nextRoute: RouteType) => setRoute(nextRoute),
             getActiveModel: () => activeModel(),
@@ -281,46 +305,50 @@ export function createAppStore({
         return result.result;
       }
 
-      if (parsed.name === "run") {
-        appendMessage(raw, "user");
-        appendMessage(`Starting run with ${parsed.rawArgs || "default scenario"}`, "system");
-        await startRun(parsed.rawArgs);
-        appendMessage("Run command dispatched.", "system");
-      } else {
-        const history = messages().flatMap((entry) => {
-          if (entry.kind !== "user" && entry.kind !== "assistant") {
-            return [];
-          }
-          return [{ role: entry.kind, content: entry.text }];
-        });
-
-        appendMessage(raw, "user");
-        setRoute("session");
-        if (isSlash) {
-          appendMessage(`Unknown command: ${raw}. Use /help`, "assistant");
-          return { ok: false, message: "Unknown command" };
+      const history = messages().flatMap((entry) => {
+        if (entry.kind !== "user" && entry.kind !== "assistant" && entry.kind !== "tool") {
+          return [];
         }
+        const role: "user" | "assistant" = entry.kind === "user" ? "user" : "assistant"
+        return [{ role, content: entry.text }];
+      });
 
-        const assistantMessageId = appendStreamingAssistantMessage();
-        const result = await chatWithPiMono({
-          modelId: activeModel(),
-          prompt: raw,
-          history,
-          onChunk: (chunk) => {
-            appendChunkToMessage(assistantMessageId, chunk);
-          },
-          onStatus: (status) => {
-            pushToast(status);
-          },
-        });
-
-        if (!result.ok) {
-          replaceMessageText(assistantMessageId, result.message);
-          return { ok: false, message: result.message };
-        }
-
-        replaceMessageText(assistantMessageId, result.text);
+      appendMessage(raw, "user");
+      setRoute("session");
+      if (isSlash) {
+        appendMessage(`Unknown command: ${raw}. Use /help`, "assistant");
+        return { ok: false, message: "Unknown command" };
       }
+
+      const assistantMessageId = appendStreamingAssistantMessage();
+      const result = await chatWithPiMono({
+        modelId: activeModel(),
+        prompt: raw,
+        history,
+        onChunk: (chunk) => {
+          appendChunkToMessage(assistantMessageId, chunk);
+        },
+        onStatus: (status) => {
+          pushToast(status);
+        },
+        onToolResult: (toolName, resultText, details, isError) => {
+          const messageText = `${isError ? "Error" : "Result"} from ${toolName}: ${formatToolResultText(
+            resultText,
+            details,
+          )}`;
+          appendToolMessage(messageText);
+        },
+        onAgentLoop: ({ abort }) => {
+          stopCurrentAgentLoop = abort;
+        },
+      });
+
+      if (!result.ok) {
+        replaceMessageText(assistantMessageId, result.message);
+        return { ok: false, message: result.message };
+      }
+
+      replaceMessageText(assistantMessageId, result.text);
 
       await refreshCatalog();
       return { ok: true, message: "command executed" };
@@ -328,26 +356,26 @@ export function createAppStore({
       appendMessage(`Command failed: ${error instanceof Error ? error.message : "Unexpected error"}`, "assistant");
       return { ok: false, message: error instanceof Error ? error.message : "Unexpected error" };
     } finally {
+      stopCurrentAgentLoop = null;
       setRunBusy(false);
     }
   };
 
-  async function startRun(rawArgs: string) {
-    setRunState("running");
-    setRoute("session");
-    setWorkers((prev) =>
-      prev.map((worker, idx) => ({
-        ...worker,
-        status: idx === 0 ? "running" : "idle",
-      })),
-    );
+  const stopActiveRun: AppActions["stopActiveRun"] = async () => {
+    if (!stopCurrentAgentLoop) {
+      appendToolMessage("No active agent loop to stop.");
+      return;
+    }
 
-    await runMockSimulation(rawArgs, {
-      appendMessage: (msg: Message) => setMessages((prev) => [...prev, msg]),
-      setWorkers: applyWorkerUpdate,
-      setRunState: setRunState,
-    });
-  }
+    appendToolMessage("Stopping active agent loop...");
+    try {
+      stopCurrentAgentLoop();
+      stopCurrentAgentLoop = null;
+      appendToolMessage("Active agent loop stopped.");
+    } catch (error) {
+      appendToolMessage(`Failed to stop active agent loop: ${error instanceof Error ? error.message : "Unexpected error"}`);
+    }
+  };
 
   return {
     state,
@@ -358,6 +386,7 @@ export function createAppStore({
         setCommandMode(shouldOpen);
       },
       submitCommand: run,
+      stopActiveRun,
       cancelCommand() {
         setCommandMode(false);
         setCommandBuffer("");

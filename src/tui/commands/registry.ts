@@ -3,7 +3,6 @@ import type { ModelChoice, ProviderChoice } from "../agent/piMono";
 
 export type CommandContext = {
   appendText: (text: string, kind: "assistant" | "system") => void;
-  startRun: (args: string) => Promise<void>;
   clearMessages: () => void;
   setRoute: (route: "home" | "session" | "results") => void;
   exit: () => void;
@@ -42,15 +41,6 @@ function delay(ms: number) {
 }
 
 export const commandRegistry: Record<string, CommandHandler> = {
-  run: {
-    name: "run",
-    description: "Run a scenario file or directory",
-    run: async (ctx, args) => {
-      await ctx.startRun(args);
-      ctx.setRoute("session");
-      return { ok: true, message: `Run started with args: ${args || "<no args>"}` };
-    },
-  },
   generate: {
     name: "generate",
     description: "Generate scenario candidates from source path",
@@ -93,7 +83,6 @@ export const commandRegistry: Record<string, CommandHandler> = {
     description: "Show command list",
     run: async (ctx) => {
       const help = [
-        "/run [path]",
         "/generate [path]",
         "/provider",
         "/provider <provider>",
