@@ -110,46 +110,53 @@ export function createAppStore({
     return next.id;
   };
 
-  const appendToolMessage = (text: string): string =>
-    appendMessage(`Tool: ${text}`, "tool");
+  const appendToolMessage = (toolName: string, resultText: string): string =>
+    appendMessage(`Tool: ${toolName}\n${resultText}`, "tool");
 
-  const formatToolResultText = (resultText: string | undefined, details?: unknown): string => {
-    if (!details) {
-      return resultText || "No result";
+  const formatToolResultText = (
+    resultText: string | undefined,
+    details?: unknown,
+  ): string => {
+    const fallback = (resultText?.trim() ?? "Tool execution completed.").replace(/\s+/g, " ");
+    const shortText = fallback.length > 140 ? `${fallback.slice(0, 140)}…` : fallback;
+
+    const isObject = typeof details === "object" && details !== null && !Array.isArray(details);
+    if (!isObject) {
+      return shortText;
     }
 
-    let renderedDetails = "";
-    try {
-      if (typeof details === "string") {
-        renderedDetails = details;
-      } else if (Array.isArray(details)) {
-        renderedDetails = JSON.stringify(details);
-      } else {
-        renderedDetails = JSON.stringify(details);
+    const record = details as Record<string, unknown>;
+    const summaryParts: string[] = [];
+    const include = (label: string, value: unknown) => {
+      if (value === undefined || value === null || value === "") {
+        return;
       }
-    } catch (error) {
-      renderedDetails = "Unable to encode result details";
+      summaryParts.push(`${label}: ${String(value)}`);
+    };
+
+    const shortCommand = typeof record.command === "string" ? record.command.trim() : "";
+    if (shortCommand) {
+      const compact = shortCommand.length > 120 ? `${shortCommand.slice(0, 120)}…` : shortCommand;
+      include("command", compact);
     }
 
-    if (!renderedDetails || renderedDetails === "{}") {
-      return resultText || "Tool executed";
+    include("exitCode", record.exitCode);
+    include("elapsedMs", record.elapsedMs);
+    include("timeoutMs", record.timeoutMs);
+    if (record.truncated === true || record.truncation) {
+      summaryParts.push("truncated");
+    }
+    if (typeof record.error === "string" && record.error.length > 0) {
+      const err = record.error.length > 160 ? `${record.error.slice(0, 160)}…` : record.error;
+      include("error", err);
+    }
+    if (record.stop === true) {
+      summaryParts.push("tool stopped");
     }
 
-    return `${resultText || "Tool executed"}\n${renderedDetails}`;
-  };
+    if (summaryParts.length === 0) return shortText;
 
-  const appendStreamingAssistantMessage = () => appendMessage("", "assistant");
-
-  const appendChunkToMessage = (messageId: string, chunk: string) => {
-    if (!chunk) {
-      return;
-    }
-
-    setMessages((prev) =>
-      prev.map((entry) =>
-        entry.id === messageId ? { ...entry, text: `${entry.text}${chunk}` } : entry,
-      ),
-    );
+    return summaryParts.join(" · ");
   };
 
   const replaceMessageText = (messageId: string, text: string) => {
@@ -320,23 +327,25 @@ export function createAppStore({
         return { ok: false, message: "Unknown command" };
       }
 
-      const assistantMessageId = appendStreamingAssistantMessage();
+      let assistantDraft = "";
+      let assistantMessageId: string | undefined;
+
       const result = await chatWithPiMono({
         modelId: activeModel(),
         prompt: raw,
         history,
         onChunk: (chunk) => {
-          appendChunkToMessage(assistantMessageId, chunk);
+          assistantDraft += chunk;
         },
         onStatus: (status) => {
+          if (status.startsWith("tool:")) {
+            return;
+          }
           pushToast(status);
         },
         onToolResult: (toolName, resultText, details, isError) => {
-          const messageText = `${isError ? "Error" : "Result"} from ${toolName}: ${formatToolResultText(
-            resultText,
-            details,
-          )}`;
-          appendToolMessage(messageText);
+          const messageText = `${isError ? "Error" : "Result"}: ${formatToolResultText(resultText, details)}`;
+          appendToolMessage(toolName, messageText);
         },
         onAgentLoop: ({ abort }) => {
           stopCurrentAgentLoop = abort;
@@ -344,11 +353,19 @@ export function createAppStore({
       });
 
       if (!result.ok) {
-        replaceMessageText(assistantMessageId, result.message);
+        if (assistantMessageId) {
+          replaceMessageText(assistantMessageId, result.message);
+        } else {
+          appendMessage(result.message, "assistant");
+        }
         return { ok: false, message: result.message };
       }
 
-      replaceMessageText(assistantMessageId, result.text);
+      const finalText = (result.text || assistantDraft || "Execution request queued.").trim();
+      assistantMessageId = appendMessage(finalText, "assistant");
+      if (assistantDraft && result.text && assistantDraft !== result.text) {
+        replaceMessageText(assistantMessageId, result.text);
+      }
 
       await refreshCatalog();
       return { ok: true, message: "command executed" };
@@ -363,17 +380,20 @@ export function createAppStore({
 
   const stopActiveRun: AppActions["stopActiveRun"] = async () => {
     if (!stopCurrentAgentLoop) {
-      appendToolMessage("No active agent loop to stop.");
+      appendMessage("No active agent loop to stop.", "assistant");
       return;
     }
 
-    appendToolMessage("Stopping active agent loop...");
+    appendMessage("Stopping active agent loop...", "assistant");
     try {
       stopCurrentAgentLoop();
       stopCurrentAgentLoop = null;
-      appendToolMessage("Active agent loop stopped.");
+      appendMessage("Active agent loop stopped.", "assistant");
     } catch (error) {
-      appendToolMessage(`Failed to stop active agent loop: ${error instanceof Error ? error.message : "Unexpected error"}`);
+      appendMessage(
+        `Failed to stop active agent loop: ${error instanceof Error ? error.message : "Unexpected error"}`,
+        "assistant",
+      );
     }
   };
 

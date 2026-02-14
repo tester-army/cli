@@ -12,7 +12,7 @@ function kindColor(kind: Message["kind"]) {
     case "system":
       return THEME.success
     case "tool":
-      return THEME.warning
+      return THEME.muted
     case "assistant":
     default:
       return THEME.text
@@ -26,7 +26,7 @@ function kindLabel(kind: Message["kind"]) {
     case "system":
       return "System"
     case "tool":
-      return "Tool"
+      return "Info"
     case "assistant":
     default:
       return "TesterArmy"
@@ -40,7 +40,7 @@ function kindBackground(kind: Message["kind"]) {
     case "system":
       return "#1d3323"
     case "tool":
-      return "#33291d"
+      return THEME.background
     case "assistant":
     default:
       return "#1f2330"
@@ -133,22 +133,28 @@ export function MessageStream(props: MessageStreamProps) {
             flexDirection="column"
             gap={1}
           >
-            <box flexDirection="row">
-              <text fg={kindColor(entry.kind)}>
-                <b>{kindLabel(entry.kind)}</b>
+            <Show when={entry.kind !== "tool"} fallback={
+              <text fg={THEME.muted} wrapMode="char" selectable selectionBg={THEME.border} selectionFg={THEME.text}>
+                {entry.text}
               </text>
-              <box flexGrow={1} />
-              <text fg={THEME.muted}>{entry.at}</text>
-            </box>
-            <text
-              fg={THEME.text}
-              wrapMode="char"
-              selectable
-              selectionBg={THEME.border}
-              selectionFg={THEME.text}
-            >
-              {entry.text}
-            </text>
+            }>
+              <box flexDirection="row">
+                <text fg={kindColor(entry.kind)}>
+                  <b>{kindLabel(entry.kind)}</b>
+                </text>
+                <box flexGrow={1} />
+                <text fg={THEME.muted}>{entry.at}</text>
+              </box>
+              <text
+                fg={THEME.text}
+                wrapMode="char"
+                selectable
+                selectionBg={THEME.border}
+                selectionFg={THEME.text}
+              >
+                {entry.text}
+              </text>
+            </Show>
           </box>
         )}
       </For>
