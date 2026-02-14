@@ -7,9 +7,18 @@ const KNOWN_COMMANDS = new Set<TuiCommandName>([
   "quit",
   "help",
   "clear",
+  "provider",
+  "providers",
+  "login",
   "model",
   "models",
 ]);
+
+type SuggestionOptions = {
+  providers?: string[];
+  models?: string[];
+  oauthProviders?: string[];
+};
 
 export function parseCommand(input: string): ParsedCommand {
   const trimmed = input.trim();
@@ -23,8 +32,9 @@ export function parseCommand(input: string): ParsedCommand {
   }
 
   const raw = trimmed.slice(1);
-  const [command, ...argTokens] = raw.split(/\s+/);
-  const name = KNOWN_COMMANDS.has(command as TuiCommandName)
+  const [rawCommand, ...argTokens] = raw.split(/\s+/);
+  const command = rawCommand?.toLowerCase();
+  const name = command && KNOWN_COMMANDS.has(command as TuiCommandName)
     ? (command as TuiCommandName)
     : "unknown";
 
@@ -52,15 +62,56 @@ export function parseCommand(input: string): ParsedCommand {
   };
 }
 
-export function commandSuggestions(filter: string): string[] {
+export function commandSuggestions(filter: string, options: SuggestionOptions = {}): string[] {
   const all = [...KNOWN_COMMANDS].map((cmd) => `/${cmd}`);
+  const providers = options.providers ?? [];
+  const models = options.models ?? [];
+  const oauthProviders = options.oauthProviders ?? [];
   const needle = filter.trim().toLowerCase();
 
   if (!needle.startsWith("/")) {
     return all;
   }
 
-  const match = needle.slice(1);
+  const withoutSlash = needle.slice(1);
+  const [commandName, ...args] = withoutSlash.split(/\s+/);
+  const rest = withoutSlash.slice(commandName?.length ?? 0).trim();
+
+  if (commandName === "provider") {
+    if (!providers.length) {
+      return ["/providers"];
+    }
+
+    return providers
+      .filter((provider) => provider.toLowerCase().includes(rest))
+      .map((provider) => `/provider ${provider}`);
+  }
+
+  if (commandName === "model" && models.length > 0) {
+    if (!rest) {
+      return models.slice(0, 8).map((model) => `/model ${model}`);
+    }
+
+    return models
+      .filter((model) => model.toLowerCase().includes(rest))
+      .map((model) => `/model ${model}`)
+      .slice(0, 8);
+  }
+
+  if (commandName === "login") {
+    const candidates = oauthProviders.length > 0 ? oauthProviders : providers;
+
+    if (!candidates.length) {
+      return ["/providers"];
+    }
+
+    return candidates
+      .filter((provider) => provider.toLowerCase().includes(rest))
+      .map((provider) => `/login ${provider}`)
+      .slice(0, 8);
+  }
+
+  const match = withoutSlash;
   if (!match) {
     return all;
   }

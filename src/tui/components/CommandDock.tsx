@@ -1,6 +1,15 @@
-import { createEffect, onCleanup, onMount } from "solid-js"
-import type { BorderCharacters, KeyEvent } from "@opentui/core"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js"
+import type { BorderCharacters, KeyEvent, SubmitEvent } from "@opentui/core"
 import type { TextareaRenderable } from "@opentui/core"
+import { Portal } from "@opentui/solid"
 import { THEME } from "../theme/opencode"
 
 const EMPTY_BORDER: BorderCharacters = {
@@ -23,12 +32,49 @@ export function CommandDock(props: {
   isBusy: () => boolean
   suggestions: () => string[]
   onCommandBuffer: (value: string) => void
-  onSubmit: () => Promise<any>
+  onSubmit: (text?: string) => Promise<any>
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
 }) {
   let input: TextareaRenderable | undefined
+  const [pickerIndex, setPickerIndex] = createSignal(0)
+  const maxVisibleSuggestions = 6
+
+  const suggestions = () => props.suggestions()
+  const hasSuggestions = createMemo(() => props.commandMode() && suggestions().length > 0)
+  const visibleSuggestions = () => suggestions().slice(0, maxVisibleSuggestions)
+
+  const isPickerCommand = createMemo(() => {
+    const trimmed = props.commandBuffer().trim().toLowerCase()
+    if (!trimmed.startsWith("/")) {
+      return false
+    }
+
+    const withoutSlash = trimmed.slice(1).trim()
+    if (!withoutSlash) {
+      return false
+    }
+
+    const command = withoutSlash.split(/\s+/)[0]
+    const providers = ["provider", "model", "login"]
+    return providers.some((name) => name.startsWith(command) || command.startsWith(name))
+  })
+
+  const clampPickerIndex = (index: number, listLength: number) => {
+    if (listLength === 0) {
+      return 0
+    }
+    const total = Math.floor(index)
+    const normalized = total % listLength
+    return normalized < 0 ? normalized + listLength : normalized
+  }
+
+  const activeSuggestion = () => {
+    const list = visibleSuggestions()
+    const idx = clampPickerIndex(pickerIndex(), list.length)
+    return list[idx]
+  }
 
   const syncBuffer = () => {
     if (!input || input.isDestroyed) {
@@ -57,26 +103,137 @@ export function CommandDock(props: {
     }
   }
 
-  const submit = async () => {
+  const resolvePotentialShortcut = (rawInput: string) => {
+    const trimmed = rawInput.trim()
+    if (!trimmed.startsWith("/") || trimmed.includes(" ")) {
+      return rawInput
+    }
+
+    const suggestionList = suggestions()
+    const exactMatch = suggestionList.find(
+      (suggestion) => suggestion.toLowerCase() === trimmed.toLowerCase(),
+    )
+    if (exactMatch) {
+      return exactMatch
+    }
+
+    if (suggestionList.length !== 1) {
+      return rawInput
+    }
+
+    const single = suggestionList[0]
+    return single.toLowerCase().startsWith(trimmed.toLowerCase()) ? single : rawInput
+  }
+
+  const submit = async (textOrEvent?: string | SubmitEvent) => {
     if (props.isBusy()) {
       return
     }
-    await props.onSubmit()
+
+    const rawInput =
+      typeof textOrEvent === "string" ? textOrEvent : input?.plainText ?? props.commandBuffer()
+    const resolvedRaw = resolvePotentialShortcut(rawInput)
+
+    if (!input || input.isDestroyed) {
+      props.onClear()
+      await props.onSubmit(resolvedRaw)
+      return
+    }
+
+    try {
+      input.setText("")
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes("EditBuffer is destroyed"))) {
+        throw error
+      }
+    }
+    props.onClear()
+    await props.onSubmit(resolvedRaw)
   }
 
-  const handleKeyDown = (event: KeyEvent) => {
+  const applySuggestion = async (suggestion: string) => {
+    if (props.isBusy()) {
+      return
+    }
+
+    props.onSuggestionSelect(suggestion)
+    await submit()
+  }
+
+  const movePickerSelection = (next: number) => {
+    if (!hasSuggestions()) {
+      return
+    }
+
+    const list = visibleSuggestions()
+    const nextIndex = clampPickerIndex(next, list.length)
+    setPickerIndex(nextIndex)
+    const nextSuggestion = list[nextIndex]
+    if (nextSuggestion) {
+      props.onSuggestionSelect(nextSuggestion)
+    }
+  }
+
+  const handleKeyDown = async (event: KeyEvent) => {
     if (event.name === "tab" && props.commandMode()) {
       event.preventDefault()
-      const [first] = props.suggestions()
-      if (first) {
-        props.onSuggestionSelect(first)
+      const next = activeSuggestion()
+      if (next) {
+        await applySuggestion(next)
+      }
+      return
+    }
+
+    if (event.name === "up") {
+      event.preventDefault()
+      if (!hasSuggestions()) {
+        return
+      }
+      movePickerSelection(pickerIndex() - 1)
+      return
+    }
+
+    if (event.name === "down") {
+      event.preventDefault()
+      if (!hasSuggestions()) {
+        return
+      }
+      movePickerSelection(pickerIndex() + 1)
+      return
+    }
+
+    if (event.name === "pageup" && hasSuggestions()) {
+      event.preventDefault()
+      movePickerSelection(pickerIndex() - maxVisibleSuggestions)
+      return
+    }
+
+    if (event.name === "pagedown" && hasSuggestions()) {
+      event.preventDefault()
+      movePickerSelection(pickerIndex() + maxVisibleSuggestions)
+      return
+    }
+
+    if (event.name === "escape") {
+      if (hasSuggestions()) {
+        event.preventDefault()
+        setPickerIndex(0)
+        props.onCancelCommand()
+        return
       }
       return
     }
 
     if ((event.name === "enter" || event.name === "return") && !event.shift) {
       event.preventDefault()
-      submit()
+      if (hasSuggestions() && isPickerCommand()) {
+        const next = activeSuggestion()
+        if (next) {
+          await applySuggestion(next)
+          return
+        }
+      }
+      await submit()
     }
   }
 
@@ -92,6 +249,15 @@ export function CommandDock(props: {
 
   createEffect(() => {
     setInputText(props.commandBuffer())
+  })
+
+  createEffect(() => {
+    if (!hasSuggestions()) {
+      setPickerIndex(0)
+      return
+    }
+
+    setPickerIndex((current) => clampPickerIndex(current, visibleSuggestions().length))
   })
 
   return (
@@ -127,6 +293,37 @@ export function CommandDock(props: {
         onKeyDown={handleKeyDown}
         onSubmit={submit}
       />
+      <Portal>
+        <Show when={hasSuggestions()}>
+          <box
+            position="absolute"
+            top={2}
+            left={2}
+            right={2}
+            zIndex={100}
+            border
+            borderColor={THEME.border}
+            backgroundColor={THEME.backgroundPanel}
+            paddingLeft={1}
+            paddingRight={1}
+          >
+            <For each={visibleSuggestions()}>
+              {(suggestion, index) => {
+                const isActive = index() === pickerIndex()
+                return (
+                  <box
+                    paddingLeft={1}
+                    paddingRight={1}
+                    backgroundColor={isActive ? THEME.warning : THEME.backgroundPanel}
+                  >
+                    <text fg={isActive ? THEME.background : THEME.text}>{suggestion}</text>
+                  </box>
+                )
+              }}
+            </For>
+          </box>
+        </Show>
+      </Portal>
     </box>
   )
 }

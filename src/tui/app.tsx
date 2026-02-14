@@ -15,7 +15,7 @@ type CommandProps = {
   activeModel: () => string
   suggestions: () => string[]
   onCommandBuffer: (value: string) => void
-  onSubmit: () => Promise<unknown>
+  onSubmit: (text?: string) => Promise<unknown>
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
@@ -59,6 +59,13 @@ function App(props: { onQuit: () => void }) {
           <SessionRoute
             messages={state.messages}
             toasts={state.toasts}
+            onCopy={(text, copied) => {
+              if (!text.trim()) {
+                return
+              }
+
+              actions.pushToast(copied ? `Copied ${text.length} characters` : "Copy failed")
+            }}
             workers={state.workers}
             runState={state.runState}
             commandProps={commandProps}

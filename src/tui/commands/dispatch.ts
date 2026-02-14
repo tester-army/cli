@@ -2,7 +2,7 @@ import { commandSuggestions } from "./parse";
 import { parseCommand } from "./parse";
 import { commandRegistry } from "./registry";
 import type { CommandResult, ParsedCommand } from "../contracts/commands";
-import type { ModelChoice } from "../agent/piMono";
+import type { ModelChoice, ProviderChoice } from "../agent/piMono";
 
 export interface DispatchInput {
   rawInput: string;
@@ -17,6 +17,8 @@ export interface DispatchContext {
   getActiveModel: () => string;
   setActiveModel: (modelId: string) => void;
   listModels: () => Promise<ModelChoice[]>;
+  listProviders: () => Promise<ProviderChoice[]>;
+  loginProvider: (provider: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 export interface DispatchResult {
@@ -41,6 +43,8 @@ export async function dispatchCommand(
       getActiveModel: ctx.getActiveModel,
       setActiveModel: ctx.setActiveModel,
       listModels: ctx.listModels,
+      listProviders: ctx.listProviders,
+      loginProvider: ctx.loginProvider,
     },
     parsed.rawArgs,
   );
@@ -52,6 +56,11 @@ export async function dispatchCommand(
   return { parsed, result };
 }
 
-export function commandAutosuggest(input: string): string[] {
-  return commandSuggestions(input);
+export function commandAutosuggest(
+  input: string,
+  providers: string[] = [],
+  models: string[] = [],
+  oauthProviders: string[] = [],
+): string[] {
+  return commandSuggestions(input, { providers, models, oauthProviders });
 }

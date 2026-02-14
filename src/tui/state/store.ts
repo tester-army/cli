@@ -4,7 +4,17 @@ import { parseCommand } from "../commands/parse";
 import type { CommandResult } from "../contracts/commands";
 import type { Message, RouteType, TuiState, WorkerCard } from "../contracts/state";
 import { runMockSimulation } from "../dev-sim/simulation";
-import { chatWithPiMono, defaultModelChoice, listAvailableModels } from "../agent/piMono";
+import {
+  chatWithPiMono,
+  defaultModelChoice,
+  getPersistedActiveModel,
+  listAvailableModels,
+  listAvailableProviders,
+  loginWithProvider,
+  persistActiveModel,
+  type ModelChoice,
+  type ProviderChoice,
+} from "../agent/piMono";
 
 interface AppState {
   route: () => RouteType;
@@ -14,6 +24,7 @@ interface AppState {
   commandBuffer: () => string;
   commandSuggestions: () => string[];
   activeModel: () => string;
+  activeProvider: () => string;
   messages: () => Message[];
   workers: () => WorkerCard[];
   toasts: () => string[];
@@ -21,11 +32,12 @@ interface AppState {
 
 interface AppActions {
   updateCommandBuffer: (value: string) => void;
-  submitCommand: () => Promise<CommandResult>;
+  submitCommand: (text?: string) => Promise<CommandResult>;
   cancelCommand: () => void;
   clearCommandBuffer: () => void;
   selectSuggestion: (command: string) => void;
   seedWelcome: () => void;
+  pushToast: (text: string) => void;
 }
 
 const message = (text: string, kind: Message["kind"] = "assistant"): Message => ({
@@ -37,6 +49,16 @@ const message = (text: string, kind: Message["kind"] = "assistant"): Message => 
 
 interface AppStoreOptions {
   onExit: () => void | Promise<void>;
+}
+
+function normalizeProviderFromModel(modelId: string): string {
+  const trimmed = modelId.trim();
+  if (!trimmed.includes(":")) {
+    return "openai";
+  }
+
+  const [provider] = trimmed.split(":");
+  return provider.trim().toLowerCase();
 }
 
 export function createAppStore({
@@ -53,8 +75,19 @@ export function createAppStore({
   ]);
   const [toasts, setToasts] = createSignal<string[]>([]);
   const [activeModel, setActiveModel] = createSignal("openai:gpt-5-mini");
+  const [activeProvider, setActiveProvider] = createSignal("openai");
+  const [availableModels, setAvailableModels] = createSignal<ModelChoice[]>([]);
+  const [availableProviders, setAvailableProviders] = createSignal<string[]>([]);
+  const [availableOAuthProviders, setAvailableOAuthProviders] = createSignal<string[]>([]);
 
-  const latestSuggestions = createMemo(() => commandAutosuggest(commandBuffer()));
+  const latestSuggestions = createMemo(() =>
+    commandAutosuggest(
+      commandBuffer(),
+      availableProviders(),
+      availableModels().map((model) => model.id),
+      availableOAuthProviders(),
+    ),
+  );
 
   const state: AppState = {
     route,
@@ -64,6 +97,7 @@ export function createAppStore({
     commandBuffer,
     commandSuggestions: latestSuggestions,
     activeModel,
+    activeProvider,
     messages,
     workers,
     toasts,
@@ -97,6 +131,12 @@ export function createAppStore({
 
   const clearMessages = () => setMessages([]);
 
+  const setActiveModelAndProvider = (nextModel: string) => {
+    setActiveModel(nextModel);
+    setActiveProvider(normalizeProviderFromModel(nextModel));
+    void persistActiveModel(nextModel);
+  };
+
   const pushToast = (text: string) =>
     setToasts((prev) => [...prev.slice(-3), text]);
 
@@ -106,32 +146,69 @@ export function createAppStore({
 
   const syncModelState = async () => {
     const choices = await listAvailableModels().catch(() => []);
+    setAvailableModels(choices);
+    const providerSet = new Set<string>();
+    choices.forEach((entry) => {
+      providerSet.add(entry.provider);
+    });
+    setAvailableProviders(Array.from(providerSet).sort());
+
     const defaults = choices.map((entry) => entry.id);
     const current = activeModel();
 
     if (choices.length > 0 && !defaults.includes(current)) {
       const fallback = current.includes(":") ? current : `openai:${current}`;
       const match = choices.find((choice) => choice.id === fallback);
-      setActiveModel((match ?? choices[0]).id);
+      setActiveModelAndProvider((match ?? choices[0]).id);
     }
 
     if (choices.length === 0) return;
+
     const configured = await defaultModelChoice();
     const found = choices.find((choice) => choice.id === configured.id);
     if (!current || !found) {
-      setActiveModel(configured.id);
+      setActiveModelAndProvider(configured.id);
     }
   };
 
-  const run: AppActions["submitCommand"] = async () => {
-    const raw = commandBuffer();
+  const syncProviderState = async () => {
+    const providers = await listAvailableProviders().catch(() => []);
+    const names = providers.map((provider) => provider.id);
+    const oauthNames = providers.filter((provider) => provider.requiresOAuth).map((provider) => provider.id);
+
+    setAvailableProviders((current) => {
+      const merged = new Set(current);
+      names.forEach((name) => merged.add(name));
+      return Array.from(merged).sort();
+    });
+    setAvailableOAuthProviders((current) => {
+      const merged = new Set(current);
+      oauthNames.forEach((name) => merged.add(name));
+      return Array.from(merged).sort();
+    });
+  };
+
+  const refreshCatalog = async () => {
+    await syncModelState();
+    await syncProviderState();
+  };
+
+  const hydrateActiveModel = async () => {
+    const restoredModel = await getPersistedActiveModel().catch(() => undefined);
+    if (restoredModel) {
+      setActiveModelAndProvider(restoredModel);
+    }
+    await refreshCatalog();
+  };
+
+  const run: AppActions["submitCommand"] = async (rawInput) => {
+    const raw = typeof rawInput === "string" ? rawInput.trim() : commandBuffer();
 
     if (!raw.trim()) {
       return { ok: false, message: "No command provided" };
     }
 
     setCommandBuffer("");
-
     setRunBusy(true);
     setCommandMode(false);
 
@@ -139,21 +216,59 @@ export function createAppStore({
       const parsed = parseCommand(raw);
       const isSlash = raw.trim().startsWith("/");
       if (parsed.name !== "unknown" && parsed.name !== "run") {
+        setRoute("session");
         appendMessage(raw, "user");
         const result = await dispatchCommand(
           { rawInput: raw },
           {
-            appendText: (text, kind) => {
+            appendText: (text: string, kind: "assistant" | "system") => {
               appendMessage(text, kind);
             },
             startRun,
             clearMessages,
             setRoute: (nextRoute: RouteType) => setRoute(nextRoute),
             getActiveModel: () => activeModel(),
-            setActiveModel: (nextModel) => setActiveModel(nextModel),
+            setActiveModel: (nextModel) => setActiveModelAndProvider(nextModel),
             listModels: async () => {
-              const choices = await listAvailableModels().catch(() => []);
-              return choices;
+              const choices = availableModels();
+              if (choices.length > 0) {
+                return choices;
+              }
+              return listAvailableModels().catch(() => []);
+            },
+            listProviders: async () => {
+              const providers = await listAvailableProviders().catch(() => []);
+              setAvailableProviders((current) => {
+                const merged = new Set(current);
+                providers.forEach((provider) => merged.add(provider.id));
+                return Array.from(merged).sort();
+              });
+              setAvailableOAuthProviders((current) => {
+                const merged = new Set(current);
+                providers.forEach((provider) => {
+                  if (provider.requiresOAuth) {
+                    merged.add(provider.id);
+                  }
+                });
+                return Array.from(merged).sort();
+              });
+              return providers;
+            },
+            loginProvider: async (provider: string) => {
+              const result = await loginWithProvider(provider, {
+                onAuth(info: { url: string; instructions?: string }) {
+                  appendMessage(`Open this URL in a browser:\n${info.url}`, "assistant");
+                  if (info.instructions) {
+                    appendMessage(info.instructions, "assistant");
+                  }
+                },
+                onProgress(message: string) {
+                  pushToast(message);
+                },
+              });
+
+              await refreshCatalog();
+              return result;
             },
             exit: () => {
               pushToast("exit requested");
@@ -207,6 +322,7 @@ export function createAppStore({
         replaceMessageText(assistantMessageId, result.text);
       }
 
+      await refreshCatalog();
       return { ok: true, message: "command executed" };
     } catch (error) {
       appendMessage(`Command failed: ${error instanceof Error ? error.message : "Unexpected error"}`, "assistant");
@@ -244,6 +360,7 @@ export function createAppStore({
       submitCommand: run,
       cancelCommand() {
         setCommandMode(false);
+        setCommandBuffer("");
       },
       clearCommandBuffer() {
         setCommandBuffer("");
@@ -254,17 +371,11 @@ export function createAppStore({
       },
       seedWelcome() {
         setRoute("home");
-        setMessages([
-          {
-            id: `welcome-${Date.now()}`,
-            at: new Date().toISOString(),
-            kind: "assistant",
-            text: "Type /help to see available commands.",
-          },
-        ]);
+        setMessages([]);
         setToasts([]);
-        void syncModelState();
+        void hydrateActiveModel();
       },
+      pushToast,
     },
   };
 }

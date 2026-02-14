@@ -10,7 +10,7 @@ type CommandProps = {
   activeModel: () => string
   suggestions: () => string[]
   onCommandBuffer: (value: string) => void
-  onSubmit: () => Promise<unknown>
+  onSubmit: (text?: string) => Promise<unknown>
   onCancelCommand: () => void
   onClear: () => void
   onSuggestionSelect: (command: string) => void
@@ -21,13 +21,18 @@ export function SessionRoute(props: {
   toasts: () => string[]
   workers: () => WorkerCard[]
   runState: () => RunState
+  onCopy?: (text: string, copied: boolean) => void
   commandProps: CommandProps
 }) {
   const { activeModel, ...commandDockProps } = props.commandProps
 
   return (
     <box flexGrow={1} flexDirection="column" minHeight={0}>
-      <MessageStream messages={props.messages} toasts={props.toasts} />
+      <MessageStream
+        messages={props.messages}
+        toasts={props.toasts}
+        onCopy={props.onCopy}
+      />
       <box paddingTop={1} flexShrink={0}>
         <CommandDock {...commandDockProps} />
       </box>

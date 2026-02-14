@@ -1,4 +1,15 @@
-export type TuiCommandName = "run" | "generate" | "config" | "quit" | "help" | "clear" | "model" | "models";
+export type TuiCommandName =
+  | "run"
+  | "generate"
+  | "config"
+  | "quit"
+  | "help"
+  | "clear"
+  | "model"
+  | "models"
+  | "provider"
+  | "providers"
+  | "login";
 
 export interface CommandArg {
   name: string;

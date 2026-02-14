@@ -7,9 +7,16 @@ import {
   getModel,
   getModels,
   getProviders,
+  getOAuthApiKey,
+  getOAuthProvider,
+  getOAuthProviders,
+  getEnvApiKey,
   type Message as AiMessage,
   type Model,
+  type OAuthCredentials,
 } from "@mariozechner/pi-ai"
+import { dirname } from "node:path"
+import { mkdir } from "node:fs/promises"
 
 type ChatTurn = {
   role: "user" | "assistant"
@@ -21,6 +28,18 @@ export type ModelChoice = {
   provider: string
   model: string
   label: string
+}
+
+export type ProviderChoice = {
+  id: string
+  name: string
+  requiresOAuth: boolean
+  authenticated: boolean
+}
+
+export type LoginWithProviderResult = {
+  ok: boolean
+  message: string
 }
 
 export type AgentResult =
@@ -47,10 +66,97 @@ const DEFAULT_MODEL = "openai:gpt-5-mini"
 const SYSTEM_PROMPT =
   "You are TesterArmy assistant. Keep responses practical and concise. Prefer actionable next steps for testing and automation."
 
+function configPath(): string {
+  return process.env.TESTER_ARMY_CONFIG ?? DEFAULT_CONFIG
+}
+
+function asNumber(record: Record<string, unknown> | undefined, key: string): number | undefined {
+  const value = record?.[key]
+  if (typeof value !== "number") return
+  return Number.isFinite(value) ? value : undefined
+}
+
 type RuntimeSettings = {
   baseUrl?: string
   apiKey?: string
   provider?: string
+}
+
+type StoredConfig = Record<string, unknown>
+
+type LoginCallbacks = {
+  onAuth: (info: { url: string; instructions?: string }) => void
+  onProgress?: (message: string) => void
+}
+
+function toOAuthCredentials(value: unknown): OAuthCredentials | undefined {
+  const record = asRecord(value)
+  const refresh = asString(record, "refresh")
+  const access = asString(record, "access")
+  const expires = asNumber(record, "expires")
+  if (!refresh || !access || typeof expires !== "number") return
+  return {
+    ...(record as OAuthCredentials),
+    refresh,
+    access,
+    expires,
+  }
+}
+
+function normalizeProviderForConfig(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? ""
+}
+
+function readStoredConfig(): Promise<StoredConfig | undefined> {
+  const path = configPath()
+  const file = Bun.file(path)
+  return file
+    .json()
+    .then((value) => asRecord(value))
+    .catch(() => undefined)
+}
+
+async function saveStoredConfig(next: StoredConfig): Promise<void> {
+  const path = configPath()
+  await mkdir(dirname(path), { recursive: true })
+  await Bun.write(path, JSON.stringify(next, null, 2))
+}
+
+async function loadProviderAuthMap(): Promise<Record<string, OAuthCredentials>> {
+  const data = await readStoredConfig()
+  const providers = asRecord(data?.providers)
+  const rawAuth = asRecord(providers?.auth)
+
+  if (!rawAuth) {
+    return {}
+  }
+
+  const auth: Record<string, OAuthCredentials> = {}
+  for (const [providerId, credentialValue] of Object.entries(rawAuth)) {
+    const credentials = toOAuthCredentials(credentialValue)
+    if (credentials) {
+      auth[normalizeProviderForConfig(providerId)] = credentials
+    }
+  }
+
+  return auth
+}
+
+async function persistProviderAuth(providerId: string, credentials: OAuthCredentials): Promise<void> {
+  const data = (await readStoredConfig()) ?? {}
+  const providers = asRecord(data.providers) ?? {}
+  const existingAuth = asRecord(providers.auth) ?? {}
+
+  providers.auth = {
+    ...existingAuth,
+    [providerId]: {
+      type: "oauth",
+      ...credentials,
+    },
+  }
+
+  data.providers = providers
+  await saveStoredConfig(data)
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -257,8 +363,114 @@ function syncProviderConfig(settings: RuntimeSettings | undefined) {
   }
 }
 
+function normalizeProviderId(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? ""
+}
+
+function isProviderAuthenticated(
+  providerId: string,
+  oauthAuthMap: Record<string, OAuthCredentials>,
+): boolean {
+  const normalized = normalizeProviderId(providerId)
+  if (!normalized) return false
+  return Boolean(oauthAuthMap[normalized]) || Boolean(getEnvApiKey(normalized))
+}
+
+export async function listAvailableProviders(): Promise<ProviderChoice[]> {
+  const providers = getProviders()
+  const oauthProviders = getOAuthProviders()
+  const oauthMap = new Map<string, string>()
+  for (const provider of oauthProviders) {
+    oauthMap.set(normalizeProviderId(provider.id), provider.name)
+  }
+
+  const authMap = await loadProviderAuthMap()
+
+  const choices: ProviderChoice[] = providers.map((provider) => {
+    const normalized = normalizeProviderId(provider)
+    return {
+      id: normalized,
+      name: oauthMap.get(normalized) ?? provider,
+      requiresOAuth: oauthMap.has(normalized),
+      authenticated: isProviderAuthenticated(normalized, authMap),
+    }
+  })
+
+  return choices.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+export async function loginWithProvider(
+  providerId: string,
+  callbacks: LoginCallbacks,
+): Promise<LoginWithProviderResult> {
+  const normalized = normalizeProviderId(providerId)
+  if (!normalized) {
+    return { ok: false, message: "Missing provider id." }
+  }
+
+  const oauthProvider = getOAuthProvider(normalized)
+  if (!oauthProvider) {
+    return { ok: false, message: `Provider "${providerId}" does not support OAuth login.` }
+  }
+
+  try {
+    const credentials = await oauthProvider.login({
+      onAuth: (info) => {
+        callbacks.onAuth(info)
+      },
+      onProgress: callbacks.onProgress,
+      onPrompt: async () => {
+        throw new Error("Manual authorization code input is not supported in this terminal UI.")
+      },
+    })
+    await persistProviderAuth(normalized, credentials)
+    return {
+      ok: true,
+      message: `Authenticated with ${oauthProvider.name}. Credentials saved to ${configPath()}.`,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Provider login failed.",
+    }
+  }
+}
+
+async function resolveApiKey(providerId: string): Promise<string | undefined> {
+  const normalized = normalizeProviderId(providerId)
+  const settings = await loadRuntimeConfig()
+  const envApiKey = getEnvApiKey(normalized)
+  const configuredProvider = normalizeProviderId(settings?.provider)
+  const configuredApiKey = settings?.apiKey
+
+  if (configuredProvider === normalized && configuredApiKey) {
+    return configuredApiKey
+  }
+
+  if (typeof envApiKey === "string" && envApiKey.length > 0) {
+    return envApiKey
+  }
+
+  const oauthProvider = getOAuthProvider(normalized)
+  if (!oauthProvider) {
+    return undefined
+  }
+
+  const authMap = await loadProviderAuthMap()
+  const result = await getOAuthApiKey(normalized, authMap)
+  if (!result) {
+    return undefined
+  }
+
+  if (result.newCredentials) {
+    await persistProviderAuth(normalized, result.newCredentials)
+  }
+
+  return result.apiKey
+}
+
 async function loadRuntimeConfig(): Promise<RuntimeSettings | undefined> {
-  const path = process.env.TESTER_ARMY_CONFIG ?? DEFAULT_CONFIG
+  const path = configPath()
   const file = Bun.file(path)
   const exists = await file.exists()
   if (!exists) return undefined
@@ -277,6 +489,71 @@ async function loadRuntimeConfig(): Promise<RuntimeSettings | undefined> {
   }
 }
 
+function buildModelIdFromParts(provider: string, model: string): string {
+  if (!provider || !model) return ""
+  return model.includes(":") ? model : `${provider}:${model}`
+}
+
+export async function getPersistedActiveModel(): Promise<string | undefined> {
+  const data = await readStoredConfig()
+  if (!data) {
+    return
+  }
+
+  const providers = asRecord(data.providers)
+  const piMono = asRecord(providers?.piMono)
+  const rawModel = asString(piMono, "model")?.trim()
+
+  if (rawModel) {
+    const parsed = normalizeModelCandidate(rawModel)
+    if (!parsed.model) {
+      return
+    }
+    return buildModelIdFromParts(parsed.provider, parsed.model)
+  }
+
+  const primary = asString(providers, "primary")?.trim().toLowerCase()
+  if (!primary) {
+    return
+  }
+
+  const defaults = asRecord(providers?.defaults)
+  const defaultModel = asString(defaults, primary)?.trim()
+  if (!defaultModel) {
+    return
+  }
+
+  const parsed = normalizeModelCandidate(defaultModel)
+  if (!parsed.model) {
+    return
+  }
+  return buildModelIdFromParts(parsed.provider, parsed.model)
+}
+
+export async function persistActiveModel(modelId: string): Promise<void> {
+  const parsed = normalizeModelCandidate(modelId)
+  if (!parsed.model) {
+    return
+  }
+
+  const normalizedProvider = normalizeProviderForConfig(parsed.provider)
+  const data = (await readStoredConfig()) ?? {}
+  const providers = asRecord(data.providers) ?? {}
+
+  const piMono = asRecord(providers.piMono) ?? {}
+  const nextModel = `${normalizedProvider}:${parsed.model}`
+
+  providers.primary = normalizedProvider
+  providers.piMono = {
+    ...piMono,
+    provider: normalizedProvider,
+    model: nextModel,
+  }
+
+  data.providers = providers
+  await saveStoredConfig(data)
+}
+
 function collectDefaultModelChoicesFromConfig(): string[] {
   const values = new Set<string>([DEFAULT_MODEL])
   const envModel = process.env.PI_MONO_MODEL
@@ -287,7 +564,7 @@ function collectDefaultModelChoicesFromConfig(): string[] {
 }
 
 export async function listAvailableModels(): Promise<ModelChoice[]> {
-  const path = process.env.TESTER_ARMY_CONFIG ?? DEFAULT_CONFIG
+  const path = configPath()
   const file = Bun.file(path)
   const exists = await file.exists()
   const data = exists ? asRecord(await file.json().catch(() => undefined)) : undefined
@@ -342,7 +619,7 @@ export async function chatWithAgentCore(input: ChatInput): Promise<AgentResult> 
   if (!model) {
     return {
       ok: false,
-      message: `Model "${desiredModel}" is not available. Use /models or /model <provider:model>.`,
+      message: `Model "${desiredModel}" is not available. Try /models to see available options.`,
     }
   }
 
@@ -359,7 +636,7 @@ export async function chatWithAgentCore(input: ChatInput): Promise<AgentResult> 
       tools: [],
       messages: contextMessages as AgentMessage[],
     },
-    getApiKey: settings?.apiKey ? () => settings.apiKey : undefined,
+    getApiKey: (provider) => resolveApiKey(provider),
   })
 
   const unsubscribe = agent.subscribe((event) => {
