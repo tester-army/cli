@@ -11,7 +11,7 @@ export interface TuiRenderer {
 
 const dynamicImport = new Function(
   "specifier",
-  "return import(specifier).then((mod) => mod as any).catch(() => null);",
+  "return import(specifier).then((mod) => mod).catch(() => null);",
 );
 
 export async function createTuiRenderer(App: () => JSX.Element): Promise<TuiRenderer> {
