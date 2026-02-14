@@ -186,7 +186,7 @@ export function createAppStore({
             text: "Tip: Type /run <path> [--parallel 2] to simulate a test execution.",
           },
         ]);
-        setToasts(["Session ready"]);
+        setToasts([]);
       },
     },
   };

@@ -50,15 +50,17 @@ export function MessageStream(props: { messages: () => Message[]; toasts: () => 
       flexGrow={1}
       minHeight={0}
       scrollbarOptions={{ visible: true }}
+      horizontalScrollbarOptions={{ visible: false }}
       stickyScroll={true}
       stickyStart="bottom"
       paddingTop={1}
       paddingBottom={1}
-      contentOptions={{ flexDirection: "column", gap: 1 }}
+      contentOptions={{ flexDirection: "column", gap: 1, width: "100%" }}
     >
         <For each={props.messages()}>
           {(entry) => (
             <box
+              width="100%"
               paddingTop={1}
               paddingBottom={1}
               paddingLeft={2}
@@ -76,7 +78,7 @@ export function MessageStream(props: { messages: () => Message[]; toasts: () => 
                 <box flexGrow={1} />
                 <text fg={THEME.muted}>{entry.at}</text>
               </box>
-              <text fg={THEME.text} wrapMode="word">
+              <text fg={THEME.text} wrapMode="char">
                 {entry.text}
               </text>
             </box>
@@ -84,9 +86,8 @@ export function MessageStream(props: { messages: () => Message[]; toasts: () => 
         </For>
         <For each={props.toasts()}>
           {(toast) => (
-            <box gap={1} paddingLeft={2} paddingRight={2}>
-              <text fg={THEME.warning}>[toast]</text>
-              <text>{toast}</text>
+            <box width="100%" gap={1} paddingLeft={2} paddingRight={2}>
+              <text fg={THEME.muted} wrapMode="char">{toast}</text>
             </box>
           )}
         </For>
