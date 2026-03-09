@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+
+# Node/npm
+node_modules/
+
+# TesterArmy artifacts
+.testerarmy/
+
+# Local env
+.env
+.env.*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

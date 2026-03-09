@@ -1,0 +1,46 @@
+name: Regression report
+description: Report behavior that worked before but now fails.
+title: "[regression] "
+labels: ["regression", "needs-triage"]
+body:
+  - type: input
+    id: command
+    attributes:
+      label: Exact command
+      placeholder: ta run tests/03-project-create.md --json
+    validations:
+      required: true
+  - type: input
+    id: last-known-good
+    attributes:
+      label: Last known good version/date
+      placeholder: v0.8.2 / 2026-03-01
+    validations:
+      required: true
+  - type: input
+    id: current-version
+    attributes:
+      label: Current CLI version
+      placeholder: testerarmy --version
+    validations:
+      required: true
+  - type: input
+    id: artifacts
+    attributes:
+      label: Failing artifact path
+      placeholder: .testerarmy/2026-03-09T12-10-10-123Z/
+    validations:
+      required: true
+  - type: textarea
+    id: what-changed
+    attributes:
+      label: What changed
+      description: Product/code/env changes near regression.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-vs-actual
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true

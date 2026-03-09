@@ -1,0 +1,22 @@
+{
+  "name": "testerarmy-agent-skills",
+  "owner": {
+    "name": "TesterArmy",
+    "email": "support@tester.army",
+    "url": "https://tester.army"
+  },
+  "metadata": {
+    "description": "Agent skills for TesterArmy CLI workflows",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "testerarmy-cli",
+      "description": "Use TesterArmy CLI to validate app behavior after changes with targeted markdown tests, debug artifacts, and pass/fail reporting.",
+      "source": "./",
+      "skills": [
+        "./skills/testerarmy-cli"
+      ]
+    }
+  ]
+}

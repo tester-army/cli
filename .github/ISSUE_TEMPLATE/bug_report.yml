@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a CLI/runtime bug with reproducible TesterArmy command.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Please include concrete CLI evidence so we can triage fast.
+  - type: input
+    id: command
+    attributes:
+      label: Exact command
+      description: Include full `ta ...` command.
+      placeholder: ta run tests/01-landing-page.md --debug
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target URL/environment
+      placeholder: https://staging.example.com
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - FAILED
+        - PASS (unexpected)
+        - CLI/runtime error
+    validations:
+      required: true
+  - type: input
+    id: exit-code
+    attributes:
+      label: Exit code
+      placeholder: "1"
+    validations:
+      required: true
+  - type: input
+    id: artifacts
+    attributes:
+      label: Artifact path
+      description: Path under `.testerarmy/<timestamp>/`
+      placeholder: .testerarmy/2026-03-09T12-10-10-123Z/
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra context
+      description: Logs, screenshots, extra commands, env details.
