@@ -1,24 +1,26 @@
-# Validation Report Template
+# Dashboard Coverage Report Template
 
-Use this exact shape in final updates.
-
-Agent default: prefer `--json`. Add `--output` when another step will read the file.
+Use this shape in final updates. Prefer remote `--json` validation.
 
 ```md
-Validation:
-- Command: ta run tests/01-landing-page.md --json --output .testerarmy/latest.json
+TesterArmy:
+- Project: Example (<projectId>)
+- Created: Login flow (<testId>)
+- Group: Smoke (<groupId>)
+- Validation: ta tests run <testId> --remote --wait --json
 - Result: PASS
-- Exit code: 0
-- Artifact: .testerarmy/2026-03-09T12-10-10-123Z/result.json
+- Run: <runId>
 ```
 
 If failed:
 
 ```md
-Validation:
-- Command: ta run tests/03-create-project.md --json
+TesterArmy:
+- Project: Example (<projectId>)
+- Updated: Checkout smoke (<testId>)
+- Group: Smoke (<groupId>)
+- Validation: ta tests run --group <groupId> --project <projectId> --remote --wait --json
 - Result: FAILED
-- Exit code: 1
-- Failure: "Create Project CTA disabled after submit"
-- Artifact: .testerarmy/2026-03-09T12-10-10-123Z/
+- Run: <runId>
+- Failure: "Checkout success screen did not appear"
 ```

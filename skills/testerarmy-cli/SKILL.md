@@ -1,158 +1,228 @@
 ---
 name: testerarmy-cli
-description: Use TesterArmy CLI to validate app behavior after changes. Run targeted markdown QA tests, inspect artifacts, and report concrete pass/fail results. Trigger after product code changes or when debugging regressions.
+description: Use TesterArmy CLI to create, organize, and run dashboard-managed QA tests. Prefer saved tests, groups, project context, credentials, and remote runs over one-off local prompts. Trigger when defining regression coverage, adding QA flows, or wiring CI checks.
 license: MIT
 metadata:
   author: TesterArmy
-  tags: testerarmy, qa, cli, testing, markdown-tests, regression
+  tags: testerarmy, qa, cli, dashboard-tests, regression, ci
 ---
 
 # TesterArmy CLI
 
-Validation workflow for repositories using `ta` / `testerarmy`.
+Create dashboard-managed QA coverage with `ta` / `testerarmy`.
+
+Default to saved dashboard tests, groups, project context, credentials, and
+remote runs. Use local `ta run "..."` only for quick exploration.
 
 ## When to Use
 
-- After any product code change before marking work done
-- When reproducing UI/API regressions with browser-level checks
-- When validating auth, onboarding, dashboard, project, team, billing, or settings flows
-- When you need machine-readable QA output for CI or artifacts
+- Create persistent QA coverage for a feature or product area.
+- Convert acceptance criteria into dashboard tests.
+- Add or update smoke, regression, auth, billing, onboarding, or mobile flows.
+- Prepare CI-visible groups for PRs or releases.
 
-## Core Commands
+## Setup
+
+Check auth:
 
 ```bash
-# Check auth/key state first (recommended)
 ta status --json
+```
 
-# Authenticate only if needed (or set TESTERARMY_API_KEY)
+If needed:
+
+```bash
 ta auth
-
-# Run a single markdown scenario (human quick check)
-ta run tests/01-landing-page.md
-
-# Run all top-level tests in directory (parallel, default 3)
-ta run tests/ --json
-
-# Override concurrency
-ta run tests/ --json --parallel 5
-
-# Inspect artifacts
-ta run tests/02-quick-test-runner.md --json
-
-# Structured output for automation
-ta run tests/03-create-project.md --json --output .testerarmy/latest-run.json
-
-# List recent local runs
-ta list
-
-# Same as list (short alias)
-ta ls
+TESTERARMY_API_KEY=<key> ta status --json
 ```
 
-## Standard Validation Flow
-
-## Agent Defaults
-
-- Agents should default to `ta run ... --json`
-- Add `--output <file>` when downstream steps need to read the result
-- Plain text output is fine for human-only quick local checks
-
-1. Check auth/key status first:
+Discover scope:
 
 ```bash
-ta status --json
+ta projects list --json
+ta groups list --project <projectId> --json
+ta tests list --project <projectId> --json
 ```
 
-If `authenticated` is `false`, run `ta auth` (or set `TESTERARMY_API_KEY`).
+Use IDs exactly as returned.
 
-2. Start app under test:
+## Project Context
+
+Create a project:
 
 ```bash
-pnpm dev
+echo '{"name":"Example","url":"https://example.com","projectType":"web"}' | ta projects create --json
 ```
 
-3. Point tests to target app:
+Store app knowledge:
 
 ```bash
-export TESTERARMY_TARGET_URL="http://localhost:3000"
+echo '{"category":"site_structure","title":"Auth route","content":"Login is at /login","importance":"high"}' | ta memories create --project <projectId> --json
 ```
 
-4. Run at least one relevant validation scenario, either:
+Memory categories: `site_structure`, `test_insights`, `user_preferences`.
 
-- a targeted markdown test from `tests/`
-- an ad hoc prompt with `ta run "..." --json`
-
-5. For cross-cutting changes, run broader coverage:
+Create credentials for login or inbox flows:
 
 ```bash
-ta run tests/ --json --parallel 3
+echo '{"kind":"login","label":"Admin","username":"admin@example.com","password":"secret"}' | ta projects credentials-create <projectId> --json
+echo '{"kind":"inbox","label":"Signup inbox"}' | ta projects credentials-create <projectId> --json
 ```
 
-6. Report exact validation command(s) and result in final update.
+Never print real secrets in final messages.
 
-## Scenario Selection
+## Tests
 
-- Landing/public pages: `tests/01-landing-page.md`
-- Quick test runner: `tests/02-quick-test-runner.md`
-- Project flows: `tests/03-create-project.md`, `tests/04-project-overview.md`, `tests/11-project-settings.md`
-- Run history: `tests/05-runs-history.md`
-- Team/settings/auth areas: `tests/07-settings-check.md`, `tests/08-create-team.md`, `tests/09-invite-member.md`, `tests/10-create-api-key.md`
-- Billing: `tests/12-billing-checks.md`
-
-If no existing scenario covers your change, run a focused prompt with explicit URL:
+Create:
 
 ```bash
-ta run "verify <changed behavior>" --url "$TESTERARMY_TARGET_URL" --json
+echo '{"title":"Login flow","description":"User can sign in and reach the dashboard","steps":[{"title":"Navigate to /login","type":"act"},{"title":"Sign in with the saved admin credentials","type":"login","credentialId":"<credentialId>"},{"title":"Dashboard loads and shows the project list","type":"assert"}]}' | ta tests create --project <projectId> --json
 ```
 
-Ad hoc prompts are valid for final validation, not only `tests/*.md` files.
-
-## Test Prompt Composition Rules
-
-- Prefer markdown tests over ad-hoc prompts when available
-- Keep shared auth/setup in `TESTER.md` (CLI auto-prepends it for directory and file runs)
-- Do not hardcode environment-specific URLs inside test files; use `TESTERARMY_TARGET_URL`
-
-## Artifacts and Debugging
-
-Each run writes to `.testerarmy/<timestamp>/`:
-
-- `run-meta.json`: lifecycle metadata (pid, timestamps, prompt, target URL)
-- `result.json`: normalized QA outcome (`PASS` / `FAILED`, issues, description)
-- `debug-run.json`: full stream + tool timeline when available
-
-Useful triage flow:
+Create in a group:
 
 ```bash
-ta list
-ta run tests/01-landing-page.md --json --headed --timeout 900000
+echo '{"title":"Pricing CTA","steps":[{"title":"Open /pricing","type":"act"},{"title":"Click the primary CTA","type":"act"},{"title":"Signup or dashboard flow starts","type":"assert"}]}' | ta tests create --project <projectId> --group <groupId> --json
 ```
 
-For multiple concurrent/background runs, use `ta ls` to check which runs are still `RUNNING` and which finished with `PASS` / `FAILED`.
+Payload:
 
-## Exit Codes
+```json
+{
+  "title": "string, required",
+  "description": "string, optional",
+  "platform": "web or mobile, optional",
+  "steps": [
+    { "title": "User action", "type": "act" },
+    { "title": "Expected result", "type": "assert" },
+    { "title": "Login instruction", "type": "login", "credentialId": "uuid" },
+    { "title": "Use temporary email", "type": "login", "temporaryEmail": true },
+    { "title": "Screenshot label", "type": "screenshot" }
+  ]
+}
+```
 
-- `0`: all tests passed
-- `1`: one or more tests failed (or run cancelled)
-- `2`: runtime/CLI error
+Rules:
 
-Treat non-zero as validation failure.
+- Cover one user journey.
+- Prefer 3-8 meaningful steps.
+- Use `act` for navigation, clicks, typing, upload, and other user actions.
+- Use `assert` for visible outcomes, persisted state, email delivery, or URL changes.
+- Use `login` with `credentialId` or `temporaryEmail`; do not put passwords in step titles.
+- Use `screenshot` only for important visual checkpoints.
+- Maximum 50 steps per test.
 
-## Required Reporting Pattern
+Inspect before changing:
 
-In final updates after code changes:
+```bash
+ta tests get <testId> --json
+```
 
-- Include the `ta run ...` command(s) used
-- Include pass/fail outcome
-- Prefer the `--json` command variant in agent reports
-- If failed, include what failed and artifact path under `.testerarmy/`
+Update title, description, or steps:
 
-Do not claim work is validated without a TesterArmy CLI run.
+```bash
+echo '{"title":"Updated login smoke"}' | ta tests update <testId> --json
+echo '{"steps":[{"title":"Open /login","type":"act"},{"title":"Sign in","type":"login","credentialId":"<credentialId>"},{"title":"Dashboard is visible","type":"assert"}]}' | ta tests update <testId> --json
+```
+
+Replacing `steps` requires the complete array.
+
+## Groups
+
+Create suites:
+
+```bash
+echo '{"projectId":"<projectId>","name":"Smoke"}' | ta groups create --json
+ta groups add-test <groupId> <testId> --json
+ta groups remove-test <groupId> <testId> --json
+```
+
+Common groups: `Smoke`, `Auth`, `Core journeys`, `Mobile smoke`.
+
+## Runs
+
+Modes:
+
+- Default/local: fetches a saved test, then runs it on this machine.
+- `--remote`: queues the saved test in TesterArmy cloud.
+
+Local debugging:
+
+```bash
+ta tests run <testId> --url http://localhost:3000 --json
+ta tests run --group <groupId> --project <projectId> --url http://localhost:3000 --parallel 3 --json
+```
+
+Remote validation:
+
+```bash
+ta tests run <testId> --remote --wait --json
+ta tests run --group <groupId> --project <projectId> --remote --wait --json
+```
+
+Defaults:
+
+- No `--remote`: local browser execution.
+- `--remote`: cloud execution.
+- `--wait`: wait for remote results.
+- Local-only flags such as `--headed`, `--browser`, `--timeout`, and `--system-prompt-file` are ignored with `--remote`.
+- Remote group runs can use `--environment production|preview`.
+- Remote single-test runs can use `--mode fast|deep`.
+
+CI:
+
+```bash
+ta ci --group <groupId> --project <projectId> --target-url https://staging.example.com --json
+```
+
+Runs:
+
+```bash
+ta runs list --project <projectId> --json
+ta runs get <runId> --json
+ta runs wait <runId> --timeout 600000 --json
+ta runs cancel <runId> --json
+```
+
+## Mobile App Coverage
+
+Upload an iOS Simulator app before cloud runs:
+
+```bash
+ta upload-app --app-path ios/build/Build/Products/Release-iphonesimulator/MyApp.app --project <projectId> --json
+ta ci --group <groupId> --project <projectId> --app-id <appId> --delete-app-after-run --json
+```
+
+Supported uploads: `.app`, `.app.zip`, `.zip`, `.app.tar.gz`, `.tar.gz`, `.tgz`.
+`.ipa` and Android artifacts are not supported yet.
+
+## Local Prompt
+
+`ta run <prompt>` runs an ad hoc local browser test:
+
+```bash
+ta run "check pricing CTA" --url https://example.com --json
+```
+
+Use only to explore before creating or updating dashboard tests. Use
+`ta tests create` and `ta tests run --group` for durable workflows.
+
+## Reporting
+
+Report:
+
+- Project ID/name
+- Test IDs and titles created or updated
+- Group IDs/names touched
+- Remote validation command and result, if run
+- Run ID or artifact/output path, if available
+
+Do not claim durable coverage unless `ta tests create` or `ta tests update` ran.
 
 ## References
 
 | File | Description |
 | --- | --- |
-| [reporting-template.md][reporting-template] | Copy-paste format for final validation status updates |
+| [reporting-template.md][reporting-template] | Dashboard coverage report template |
 
 [reporting-template]: references/reporting-template.md
