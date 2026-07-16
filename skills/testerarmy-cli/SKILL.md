@@ -11,8 +11,11 @@ metadata:
 
 Create dashboard-managed QA coverage with `ta` / `testerarmy`.
 
-Default to saved dashboard tests, groups, project context, credentials, and
-remote runs. Use local `ta run "..."` only for quick exploration.
+The CLI is a control plane for the TesterArmy dashboard: manage projects,
+environments, credentials, and saved tests, and queue remote runs that execute
+in TesterArmy cloud. `ta tests run` queues remote dashboard runs by default.
+Use local execution (`ta run "..."` or `ta tests run --local`) only for quick
+exploration.
 
 ## When to Use
 
@@ -62,8 +65,21 @@ echo '{"name":"Example staging"}' | ta projects update <projectId> --json
 ta projects files <projectId> --json
 ```
 
-Project commands: `list`, `get`, `create`, `update`, `delete`, `credentials`,
+Project commands: `list`, `get`, `create`, `update`, `delete`, `environments`,
+`environments-create`, `environments-delete`, `credentials`,
 `credentials-create`, `files`.
+
+Manage saved environments (remote run targets such as Staging or QA):
+
+```bash
+ta projects environments <projectId> --json
+ta projects environments-create <projectId> --name Staging --url https://staging.example.com --json
+ta projects environments-delete <projectId> <environmentId> --json
+```
+
+Production and PR Preview are built-in environments and cannot be deleted.
+Target a saved environment on runs with `--env <nameOrSlug>` or
+`--project-environment-id <id>`.
 
 Delete projects only when explicitly requested:
 
@@ -171,14 +187,22 @@ ta tests list --project <projectId> --json
 ta tests get <testId> --json
 ```
 
-Update title, description, or steps:
+Update title, description, steps, or enabled:
 
 ```bash
 echo '{"title":"Updated login smoke"}' | ta tests update <testId> --json
 echo '{"steps":[{"title":"Open /login","type":"act"},{"title":"Sign in","type":"login","credentialId":"<credentialId>"},{"title":"Dashboard is visible","type":"assert"}]}' | ta tests update <testId> --json
+echo '{"enabled":false}' | ta tests update <testId> --json
 ```
 
 Replacing `steps` requires the complete array.
+
+Toggle a test without deleting it:
+
+```bash
+ta tests disable <testId> --json
+ta tests enable <testId> --json
+```
 
 Delete only when explicitly requested:
 
@@ -211,33 +235,35 @@ Common groups: `Smoke`, `Auth`, `Core journeys`, `Mobile smoke`.
 
 Modes:
 
-- Default/local: fetches a saved test, then runs it on this machine.
-- `--remote`: queues the saved test in TesterArmy cloud.
+- Default/remote: queues the saved test in TesterArmy cloud; results show up in the dashboard.
+- `--local`: fetches the saved test, then runs it on this machine.
+
+Remote validation (default):
+
+```bash
+ta tests run <testId> --wait --json
+ta tests run <testId> --env staging --wait --json
+ta tests run --group <groupId> --project <projectId> --wait --json
+ta tests run <testId> --platform ios --app-id <appId> --wait --json
+ta tests run <testId> --platform android --app-id <appId> --wait --json
+```
 
 Local debugging:
 
 ```bash
-ta tests run <testId> --url http://localhost:3000 --json
-ta tests run --group <groupId> --project <projectId> --url http://localhost:3000 --parallel 3 --json
-```
-
-Remote validation:
-
-```bash
-ta tests run <testId> --remote --wait --json
-ta tests run --group <groupId> --project <projectId> --remote --wait --json
-ta tests run <testId> --remote --platform ios --app-id <appId> --wait --json
-ta tests run <testId> --remote --platform android --app-id <appId> --wait --json
+ta tests run <testId> --local --url http://localhost:3000 --json
+ta tests run --group <groupId> --project <projectId> --local --url http://localhost:3000 --parallel 3 --json
 ```
 
 Defaults:
 
-- No `--remote`: local browser execution.
-- `--remote`: cloud execution.
+- No flag: remote cloud execution (dashboard run).
+- `--local`: local browser execution on this machine.
 - `--wait`: wait for remote results.
-- Local-only flags such as `--headed`, `--browser`, `--timeout`, and `--system-prompt-file` are ignored with `--remote`.
+- `--env <nameOrSlug>`: target a saved project environment (remote runs pass its ID; local runs use its URL).
+- Local-only flags such as `--headed`, `--browser`, `--timeout`, and `--system-prompt-file` are ignored for remote runs.
 - Local runs can use `--headed`, `--browser chrome|firefox|safari`, `--timeout`, `--output`, `--debug`, and `--system-prompt-file`.
-- Remote runs can use `--wait-timeout`, `--wait-interval`, `--output`, `--platform web|ios|android`, and `--app-id`.
+- Remote runs can use `--wait-timeout`, `--wait-interval`, `--output`, `--platform web|ios|android`, `--app-id`, and `--project-environment-id`.
 - Remote group runs can use `--environment production|staging|preview`.
 - Remote single-test runs can use `--mode fast|deep`.
 
@@ -257,8 +283,8 @@ Upload an iOS Simulator app or Android APK before cloud runs:
 ```bash
 ta upload-app --app-path ios/build/Build/Products/Release-iphonesimulator/MyApp.app --project <projectId> --json
 ta upload-app --app-path MyApp.apk --project <projectId> --remove-after 3600 --json
-ta tests run <testId> --remote --platform ios --app-id <appId> --wait --json
-ta tests run <testId> --remote --platform android --app-id <appId> --wait --json
+ta tests run <testId> --platform ios --app-id <appId> --wait --json
+ta tests run <testId> --platform android --app-id <appId> --wait --json
 ```
 
 Supported uploads: `.app`, `.app.zip`, `.zip` for iOS Simulator apps and `.apk`
@@ -276,7 +302,8 @@ Useful flags: `--headed`, `--browser chrome|firefox|safari`, `--timeout`,
 `--output`, `--debug`, and `--system-prompt-file`.
 
 Use only to explore before creating or updating dashboard tests. Use
-`ta tests create` and `ta tests run --group` for durable workflows.
+`ta tests create` and `ta tests run --group` for durable workflows that run
+remotely on the dashboard.
 
 ## Reporting
 
