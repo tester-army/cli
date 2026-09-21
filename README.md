@@ -119,7 +119,18 @@ Cursor: open Customize and search for `testerarmy`, or click Add to Cursor on th
 }
 ```
 
-This repo is also a Claude Code plugin that installs the MCP server and the `testerarmy-cli` skill together: run `/plugin marketplace add tester-army/cli`, then `/plugin install testerarmy@testerarmy-agent-skills`.
+This repo is also a plugin that installs the MCP server and the `testerarmy-cli` skill together.
+
+Claude Code: run `/plugin marketplace add tester-army/cli`, then `/plugin install testerarmy@testerarmy-agent-skills`.
+
+Codex: the repo is a plugin marketplace too, so until TesterArmy appears in the Plugins Directory you can add it from here:
+
+```bash
+codex plugin marketplace add tester-army/cli
+codex plugin add testerarmy@testerarmy-agent-skills
+```
+
+The plugin registers the hosted server for you; sign in once with `codex mcp login testerarmy`, or accept the sign-in prompt the ChatGPT app shows at install. In the ChatGPT desktop app, open this repository in Codex and the marketplace appears as a source in the Plugins tab.
 
 Full reference for the server and its tools: https://docs.tester.army/cli/mcp
 

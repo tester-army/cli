@@ -9,6 +9,7 @@ on:
       - ".claude-plugin/**"
       - ".codex-plugin/**"
       - ".cursor-plugin/**"
+      - ".agents/plugins/**"
       - "assets/**"
       - "server.json"
       - "scripts/check-plugin-manifests.sh"

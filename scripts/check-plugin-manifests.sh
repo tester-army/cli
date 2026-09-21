@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Keeps the plugin manifests and the MCP Registry manifest (server.json) in step. Run locally or in CI.
+# Keeps the plugin manifests, the Codex repo marketplace and the MCP Registry manifest (server.json) in step. Run locally or in CI.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-files=(.claude-plugin/plugin.json .claude-plugin/marketplace.json .codex-plugin/plugin.json .cursor-plugin/plugin.json plugin.json .mcp.json mcp.json server.json)
+files=(.claude-plugin/plugin.json .claude-plugin/marketplace.json .codex-plugin/plugin.json .cursor-plugin/plugin.json plugin.json .mcp.json mcp.json server.json .agents/plugins/marketplace.json)
 for f in "${files[@]}"; do jq -e . "$f" >/dev/null || { echo "invalid JSON: $f"; exit 1; }; done
 
 # name, version and description must match across every manifest and the marketplace entry
+ref_name=$(jq -r .name plugin.json)
 for key in name version description; do
   ref=$(jq -r ".$key" plugin.json)
   for f in .claude-plugin/plugin.json .codex-plugin/plugin.json .cursor-plugin/plugin.json; do
@@ -31,6 +32,12 @@ u2=$(jq -r '.mcpServers.testerarmy.url' mcp.json)
 # same version as the plugins, same server URL as the MCP files
 [ "$(jq -r .version server.json)" = "$(jq -r .version plugin.json)" ] || { echo "version differs in server.json (bump it with the plugin manifests)"; exit 1; }
 [ "$(jq -r '.remotes[0].url' server.json)" = "$u1" ] || { echo "server.json remotes[0].url differs from the MCP files"; exit 1; }
+
+# the Codex repo marketplace (.agents/plugins/marketplace.json, read by `codex plugin marketplace add tester-army/cli`
+# and by the ChatGPT app) must point at this plugin under the same name as the Claude marketplace
+[ "$(jq -r '.plugins[0].name' .agents/plugins/marketplace.json)" = "$ref_name" ] || { echo "Codex marketplace plugin name differs from plugin.json"; exit 1; }
+[ "$(jq -r '.plugins[0].source.path' .agents/plugins/marketplace.json)" = "./" ] || { echo "Codex marketplace must reference the repo root (./)"; exit 1; }
+[ "$(jq -r .name .agents/plugins/marketplace.json)" = "$(jq -r .name .claude-plugin/marketplace.json)" ] || { echo "Codex and Claude marketplace names differ"; exit 1; }
 
 # referenced logo must exist
 for p in "$(jq -r .logo .cursor-plugin/plugin.json)" "$(jq -r .interface.logo .codex-plugin/plugin.json)"; do
