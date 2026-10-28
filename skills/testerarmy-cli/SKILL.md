@@ -1,6 +1,6 @@
 ---
 name: testerarmy-cli
-description: Use TesterArmy CLI to create, organize, and run dashboard-managed QA tests in TesterArmy cloud. Trigger when defining regression coverage, validating a flow, or inspecting remote test results.
+description: Use TesterArmy CLI to create, organize, schedule, and run dashboard-managed QA tests in TesterArmy cloud. Trigger when defining regression coverage, validating a flow, exploring an app for bugs, or inspecting remote test results and issues.
 license: MIT
 metadata:
   author: TesterArmy
@@ -21,6 +21,7 @@ validate development changes.
 - Create persistent QA coverage for a feature or product area.
 - Convert acceptance criteria into dashboard tests.
 - Add or update smoke, regression, auth, billing, onboarding, or mobile flows.
+- Explore an area for bugs without a saved test, or triage the issues runs found.
 
 ## Setup
 
@@ -54,6 +55,9 @@ ta tests list --project <projectId> --json
 
 Use IDs exactly as returned.
 
+`ta docs <topic>` prints the full reference for a topic: `projects`,
+`memories`, `tests`, `groups`, `runs`, `issues`, `discover`, `ci`.
+
 ## Project Context
 
 Create a project:
@@ -62,11 +66,16 @@ Create a project:
 echo '{"name":"Example","url":"https://example.com","projectType":"web"}' | ta projects create --json
 echo '{"name":"Example staging"}' | ta projects update <projectId> --json
 ta projects files <projectId> --json
+ta projects files-upload <projectId> --file avatar.png --description "Profile photo" --json
 ```
 
 Project commands: `list`, `get`, `create`, `update`, `delete`, `environments`,
 `environments-create`, `environments-delete`, `credentials`,
-`credentials-create`, `files`.
+`credentials-create`, `files`, `files-upload`, `apps`, `apps-delete`.
+
+Project files (max 50 MB) are inputs runs can use, such as uploads for `files`
+steps. On mobile projects, photos and videos are preloaded into the device
+library.
 
 Manage saved environments (remote run targets such as Staging or QA):
 
@@ -230,6 +239,21 @@ ta groups delete <groupId> --json
 
 Common groups: `Smoke`, `Auth`, `Core journeys`, `Mobile smoke`.
 
+Run a group on a recurring schedule (web projects only). Use `--frequency`
+(`every_1h`, `every_3h`, `every_6h`, `every_12h`, `daily`, `weekly`) with
+`--minute`, `--hour`, and `--day-of-week`, or `--cron` for anything else:
+
+```bash
+ta groups schedule <groupId> --json
+ta groups schedule-set <groupId> --frequency daily --hour 8 --timezone Europe/Warsaw --json
+ta groups schedule-set <groupId> --cron "0 8 * * 1-5" --project-environment-id <environmentId> --json
+ta groups schedule-delete <groupId> --json
+```
+
+A group has at most one schedule; `schedule-set` replaces it. Schedules run
+every enabled test in the group against Production unless
+`--project-environment-id` is set. Timezone defaults to UTC.
+
 ## Runs
 
 `ta tests run` queues the saved test in TesterArmy cloud. Add `--wait` for
@@ -275,7 +299,60 @@ ta runs wait <runId> --timeout 600000 --json
 ta runs messages <runId> --json
 ta runs telemetry <runId> --json
 ta runs cancel <runId> --json
+ta runs recording <runId> --output ./recordings/
 ```
+
+To debug a failed run: `ta runs get` first, then `ta runs messages` for what
+the agent did, `ta runs telemetry` for console and network errors, and
+`ta runs recording` for the screen recording. Without `--output`, `recording`
+prints a short-lived MP4 link.
+
+Group runs share a batch ID:
+
+```bash
+ta batches get <batchId> --json
+ta batches cancel <batchId> --json
+ta batches rerun <batchId> --json
+```
+
+Export JUnit XML for CI reporters or TestRail. It fails until every run
+finishes unless `--allow-incomplete` is set:
+
+```bash
+ta runs junit <runId> --output report.xml
+ta batches junit <batchId> --output report.xml
+```
+
+## Discovery and Issues
+
+`ta discover` queues a free-roam run: the agent explores toward a goal with no
+saved test and reports bugs. A FAILED verdict means bugs were found. With
+`--wait`, the command exits 1 for every outcome except a pass: bugs found
+(FAILED), blocked, or cancelled. Read the run verdict in the `--json` output to
+tell them apart.
+
+```bash
+ta discover --project <projectId> --goal "Explore checkout and find bugs" --wait --json
+ta discover --project <projectId> --goal "Explore settings" --target-url https://staging.example.com --wait --json
+ta discover --project <projectId> --goal "Explore onboarding" --platform android --wait --json
+```
+
+`--target-url` is web only. Mobile projects default to iOS and explore the
+latest uploaded app; `--app-id` picks another build and needs
+`--platform ios|android`. `--device-model` picks the device.
+
+Found bugs land in issues, deduplicated across runs and tracked per
+environment:
+
+```bash
+ta issues list --project <projectId> --status open --json
+ta issues list --project <projectId> --environment staging --limit 20 --json
+ta issues get <issueId> --project <projectId> --json
+```
+
+Statuses: `open`, `resolved`, `false_positive`. `ta issues get` lists the runs
+that surfaced the issue; inspect them with `ta runs messages` or
+`ta runs recording`. Turn flows worth keeping into saved tests.
 
 ## Mobile App Coverage
 
@@ -290,6 +367,13 @@ ta tests run <testId> --platform android --app-id <appId> --wait --json
 
 Supported uploads: `.app`, `.app.zip`, `.zip` for iOS Simulator apps and `.apk`
 for Android. Use `--remove-after <seconds>` to auto-delete uploaded apps.
+
+List or delete uploaded builds:
+
+```bash
+ta projects apps <projectId> --json
+ta projects apps-delete <projectId> <appId> --json
+```
 
 ## Reporting
 

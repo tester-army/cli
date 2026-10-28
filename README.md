@@ -25,7 +25,8 @@ and queues runs that execute in TesterArmy cloud.
 
 - Create and organize saved tests with plain-language steps.
 - Run browser and mobile checks against saved environments.
-- Wait for results and inspect run transcripts through JSON output.
+- Wait for results and inspect run transcripts, recordings, and JUnit reports.
+- Schedule groups, explore with discovery runs, and triage the issues they find.
 - Feed concrete validation back to coding agents.
 
 Start here:
@@ -86,7 +87,7 @@ npx skills add tester-army/cli
 
 ## MCP server and plugins
 
-TesterArmy also runs as a hosted MCP server at `https://tester.army/mcp` (Streamable HTTP). It signs you in with your TesterArmy account through OAuth, so there is no API key to create or paste.
+TesterArmy also runs as a hosted MCP server at `https://tester.army/mcp` (Streamable HTTP). It signs you in with your TesterArmy account through OAuth, so there is no API key to create or paste. MCP and the CLI cover the same features; pick whichever your agent drives more easily.
 
 Claude Code:
 
