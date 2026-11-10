@@ -8,7 +8,7 @@
     "url": "https://tester.army"
   },
   "homepage": "https://docs.tester.army/cli/mcp",
-  "repository": "https://github.com/tester-army/cli",
+  "repository": "https://github.com/e2e-inc/cli",
   "license": "MIT",
   "keywords": [
     "testing",

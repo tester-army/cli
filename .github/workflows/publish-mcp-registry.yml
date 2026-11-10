@@ -1,7 +1,7 @@
 name: Publish to MCP Registry
 
 # Publishes server.json to the Official MCP Registry (registry.modelcontextprotocol.io) as
-# io.github.tester-army/testerarmy, which feeds Glama, PulseMCP and the other aggregators.
+# io.github.e2e-inc/testerarmy, which feeds Glama, PulseMCP and the other aggregators.
 #
 # Authentication is GitHub Actions OIDC: the registry grants the io.github.<repository owner>/*
 # namespace to workflows running in this organisation's repositories. A personal

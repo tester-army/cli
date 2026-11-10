@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.tester-army/testerarmy",
+  "name": "io.github.e2e-inc/testerarmy",
   "title": "TesterArmy",
   "description": "Agents that test your web and mobile app like real users, on every pull request.",
   "version": "1.0.0",
   "websiteUrl": "https://docs.tester.army/cli/mcp",
   "repository": {
-    "url": "https://github.com/tester-army/cli",
+    "url": "https://github.com/e2e-inc/cli",
     "source": "github"
   },
   "remotes": [
