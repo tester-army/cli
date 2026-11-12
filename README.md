@@ -82,7 +82,7 @@ with `--env <nameOrSlug>`.
 Use skills CLI install:
 
 ```bash
-npx skills add tester-army/cli
+npx skills add e2e-inc/cli
 ```
 
 ## MCP server and plugins
@@ -122,12 +122,12 @@ Cursor: open Customize and search for `testerarmy`, or click Add to Cursor on th
 
 This repo is also a plugin that installs the MCP server and the `testerarmy-cli` skill together.
 
-Claude Code: run `/plugin marketplace add tester-army/cli`, then `/plugin install testerarmy@testerarmy-agent-skills`.
+Claude Code: run `/plugin marketplace add e2e-inc/cli`, then `/plugin install testerarmy@testerarmy-agent-skills`.
 
 Codex: the repo is a plugin marketplace too, so until TesterArmy appears in the Plugins Directory you can add it from here:
 
 ```bash
-codex plugin marketplace add tester-army/cli
+codex plugin marketplace add e2e-inc/cli
 codex plugin add testerarmy@testerarmy-agent-skills
 ```
 
